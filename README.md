@@ -17,8 +17,8 @@ I make AI write scripts so fast it begs for mercy. I am the founder of **CUKServ
 
 ### 🕹️ Things I'm Currently Working On
 
-* Keeping servers alive for **Call of Duty (IW4x, T4, T5, T6)**.
-* Hosting **7 Days to Die**, **Project Zomboid**, and **Ark**.
+* Keeping servers alive for **Call of Duty (IW4x, T4, T5, T6, IW5)**.
+* Hosting **7 Days to Die**, **Project Zomboid**, and **Ark** Game Servers.
 * Writing Scripts for my game servers which i leave public for all to use.
 * Managing CUKServers at **[cukservers.net](https://cukservers.net)**.
 
