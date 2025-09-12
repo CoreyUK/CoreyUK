@@ -1,16 +1,33 @@
-## Hi there 👋
+## Hi there Bozo👋
 
-<!--
-**CoreyUK/CoreyUK** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+### 💻 I Am The Keyboard Sped
 
-Here are some ideas to get you started:
+<p align="center">
+  <a href="https://cukservers.net">
+    <img src="https://img.shields.io/badge/CUKServers-black?style=for-the-badge&logo=codewars&logoColor=purple" alt="CUKServers Website"/>
+  </a>
+  <a href="https://discord.cukservers.net">
+    <img src="https://img.shields.io/badge/Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white" alt="Discord Badge"/>
+  </a>
+</p>
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+I make AI write scripts so fast it begs for mercy. I am the founder of **CUKServers**, and I run game servers for thousands of players.
+
+---
+
+### 🕹️ Things I'm Currently Working On
+
+* Keeping servers alive for **Call of Duty (IW4x, T4, T5, T6)**.
+* Hosting **7 Days to Die**, **Project Zomboid**, and **Ark**.
+* Writing Scripts for my game servers which i leave public for all to use.
+* Managing CUKServers at **[cukservers.net](https://cukservers.net)**.
+
+---
+
+### 🛠️ Tech & Tools
+
+<p align="left">
+  <img src="https://skillicons.dev/icons?i=py,go,js,docker,linux,github,vscode" />
+</p>
+
+I'm always learning new things, But GSC + LUA Are the boys
