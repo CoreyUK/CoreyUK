@@ -11,14 +11,14 @@
   </a>
 </p>
 
-I make AI write scripts so fast it begs for mercy. I am the founder of **CUKServers**, and I run game servers for thousands of players.
+I am the founder of **CUKServers**, and I run game servers for thousands of players.
 
 ---
 
 ### 🕹️ Things I'm Currently Working On
 
 * Keeping servers alive for **Call of Duty (IW4x, T4, T5, T6, IW5)**.
-* Hosting **7 Days to Die**, **Project Zomboid**, and **Ark** Game Servers.
+* Hosting **7 Days to Die**, **Project Zomboid**, and **SDTD** Game Servers.
 * Writing Scripts for my game servers which i leave public for all to use.
 * Managing CUKServers at **[cukservers.net](https://cukservers.net)**.
 
