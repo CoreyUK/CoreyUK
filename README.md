@@ -1,33 +1,72 @@
-  ## Hi there Bozo👋
+# Hi, I'm Corey "Shep"👋
 
-### 💻 I Am The Keyboard Sped
+### Game Server Operator • Mod Developer • Civil Engineer
 
 <p align="center">
   <a href="https://cukservers.net">
-    <img src="https://img.shields.io/badge/CUKServers-black?style=for-the-badge&logo=codewars&logoColor=purple" alt="CUKServers Website"/>
+    <img src="https://img.shields.io/badge/CUKServers-111111?style=for-the-badge&logo=serverfault&logoColor=8A2BE2" alt="CUKServers Website"/>
   </a>
   <a href="https://discord.cukservers.net">
-    <img src="https://img.shields.io/badge/Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white" alt="Discord Badge"/>
+    <img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="CUKServers Discord"/>
   </a>
 </p>
 
-I am the founder of **CUKServers**, and I run game servers for thousands of players.
+I'm the founder of **CUKServers**, where I host and maintain game servers used by thousands of players.
+
+I work in construction as a **Civil Engineer**. In my spare time, I build scripts, mods, tools, and server improvements for whichever games have caught my attention.
 
 ---
 
-### 🕹️ Things I'm Currently Working On
+## 🎮 What I Work On
 
-* Keeping servers alive for **Call of Duty (IW4x, T4, T5, T6, IW5)**.
-* Hosting **7 Days to Die**, **Project Zomboid**, and **SDTD** Game Servers.
-* Writing Scripts for my game servers which i leave public for all to use.
-* Managing CUKServers at **[cukservers.net](https://cukservers.net)**.
+- Hosting and maintaining multiplayer game servers
+- Developing public scripts, mods, and server-side tools
+- Managing the infrastructure behind **[CUKServers](https://cukservers.net)**
+- Keeping older Call of Duty titles alive through community clients and custom content
+- Experimenting with new games, modding tools, and dedicated-server platforms
+
+### Games and Communities
+
+My projects have included:
+
+- **Call of Duty:** IW4x, IW5, Plutonium T4, T5, and T6
+- **Mount & Blade II: Bannerlord**
+- **Parkitect**
+- **7 Days to Die**
+- **Project Zomboid**
+- And pretty much anything else that lets me modify, automate, or host it
+
+Whenever possible, I make my work public so other server owners, developers, and players can use it.
 
 ---
 
-### 🛠️ Tech & Tools
+## 🛠️ Technologies and Tools
 
-<p align="left">
-  <img src="https://skillicons.dev/icons?i=py,go,js,docker,linux,github,vscode" />
+<p align="center">
+  <img src="https://skillicons.dev/icons?i=py,go,js,lua,docker,linux,github,vscode" alt="Python, Go, JavaScript, Lua, Docker, Linux, GitHub and VS Code"/>
 </p>
 
-I'm always learning new things, But GSC + LUA Are the boys
+I regularly work with:
+
+- **GSC and Lua** for game scripting
+- **Python, Go, and JavaScript** for tools and automation
+- **Docker and Linux** for hosting and infrastructure
+- **GitHub** for sharing projects with the community
+
+I'm always learning and experimenting but mostly breaking things
+
+---
+
+## 🌐 CUKServers
+
+CUKServers is a gaming community focused on reliable servers, custom content, and keeping great multiplayer games alive.
+
+- 🌍 **Website:** [cukservers.net](https://cukservers.net)
+- 💬 **Discord:** [discord.cukservers.net](https://discord.cukservers.net)
+- 📂 **Projects:** Browse my repositories below
+
+---
+
+<p align="center">
+  <strong>Building things, breaking things, and occasionally keeping the servers online.</strong>
+</p>
