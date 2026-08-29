@@ -1,6 +1,6 @@
 # Hi, I'm Corey "Shep"👋
 
-### Game Server Operator • Mod Developer • Civil Engineer
+### Game Server Provider • Mod Developer • Civil Engineer
 
 <p align="center">
   <a href="https://cukservers.net">
