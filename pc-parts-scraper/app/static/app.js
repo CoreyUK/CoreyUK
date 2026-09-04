@@ -332,7 +332,7 @@
     };
     svg.addEventListener("mousemove", onMove);
     svg.addEventListener("mouseleave", () => { cursor.style.opacity = 0; dot.style.opacity = 0; els.hTip.hidden = true; });
-    els.hChart.append(svg);
+    els.hChart.append(svg, els.hTip);  // tooltip is positioned relative to the chart box
   };
 
   async function openHistory(l) {
