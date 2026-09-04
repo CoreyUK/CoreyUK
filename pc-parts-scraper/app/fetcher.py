@@ -67,7 +67,7 @@ class Fetcher:
     async def close(self) -> None:
         await self._client.aclose()
 
-    async def get(self, url: str, *, retries: int = 1, dump_name: str | None = None) -> str:
+    async def get(self, url: str, *, retries: int = 1, dump_name: str | None = None, headers: dict[str, str] | None = None) -> str:
         host = urlsplit(url).netloc.lower()
         attempt = 0
         while True:
@@ -75,7 +75,7 @@ class Fetcher:
             try:
                 async with self._global, self._hosts.get(host):
                     started = time.monotonic()
-                    response = await self._client.get(url)
+                    response = await self._client.get(url, headers=headers)
                     elapsed = (time.monotonic() - started) * 1000
                 log.debug("GET %s -> %s in %.0fms", url, response.status_code, elapsed)
                 text = response.text

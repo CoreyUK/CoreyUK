@@ -1,6 +1,7 @@
 """FastAPI application: JSON API plus the static single-page UI."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -46,11 +47,22 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
         app.state.cache = cache or ResultCache(settings.cache_db_path, settings.cache_ttl_seconds)
         app.state.service = SearchService(settings, app.state.fetcher, app.state.cache, enabled_retailers(settings))
         app.state.limiter = SlidingWindowLimiter(settings.api_rate_limit_per_minute, 60.0)
+        app.state.global_limiter = SlidingWindowLimiter(settings.global_search_limit_per_minute, 60.0)
         app.state.refresh_gate = MinIntervalGate(settings.force_refresh_min_interval_seconds)
-        app.state.cache.purge_sync(max_age_seconds=7 * 24 * 3600)
+
+        async def housekeeping() -> None:
+            while True:
+                try:
+                    await asyncio.to_thread(app.state.cache.purge_sync, 7 * 24 * 3600, 90 * 24 * 3600)
+                except Exception:  # pragma: no cover - never let maintenance kill the app
+                    logging.getLogger(__name__).exception("cache purge failed")
+                await asyncio.sleep(3600)
+
+        purge_task = asyncio.create_task(housekeeping())
         try:
             yield
         finally:
+            purge_task.cancel()
             await app.state.fetcher.close()
             app.state.cache.close()
 
@@ -58,15 +70,17 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
     app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     def client_key(request: Request) -> str:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
+        # Never read X-Forwarded-For here: anyone can send that header and dodge the limit.
+        # Behind a reverse proxy run uvicorn with --proxy-headers and --forwarded-allow-ips set
+        # to the proxy's address; it then rewrites request.client from the trusted header.
         return request.client.host if request.client else "unknown"
 
     @app.middleware("http")
     async def api_rate_limit(request: Request, call_next):  # type: ignore[no-untyped-def]
         if request.url.path.startswith("/api/search"):
             allowed, remaining, retry_after = request.app.state.limiter.check(client_key(request))
+            if allowed:
+                allowed, _, retry_after = request.app.state.global_limiter.check("all")
             if not allowed:
                 return JSONResponse(
                     {"detail": "Too many searches, slow down a little.", "retry_after": round(retry_after, 1)},
@@ -76,8 +90,19 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
             response: Response = await call_next(request)
             response.headers["X-RateLimit-Limit"] = str(request.app.state.limiter.limit)
             response.headers["X-RateLimit-Remaining"] = str(remaining)
-            return response
-        return await call_next(request)
+            return _secure(response)
+        return _secure(await call_next(request))
+
+    def _secure(response: Response) -> Response:
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        )
+        return response
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:

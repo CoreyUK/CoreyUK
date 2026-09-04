@@ -16,6 +16,7 @@ class Listing(BaseModel):
     url: str
     image: str | None = None
     in_stock: bool | None = None
+    seller: str | None = None  # partner shop when a listing comes via a marketplace (e.g. NVIDIA Store)
     previous_price: float | None = None
     relevance: float = 0.0
 

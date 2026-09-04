@@ -126,11 +126,16 @@ class ResultCache:
         return await asyncio.to_thread(self.history_sync, retailer, url, limit)
 
     # ----- maintenance -------------------------------------------------------------
-    def purge_sync(self, max_age_seconds: float) -> int:
-        cutoff = time.time() - max_age_seconds
+    def purge_sync(self, max_age_seconds: float, price_max_age_seconds: float | None = None) -> int:
+        """Drop old cached results (and, optionally, old price observations) so the DB stays bounded."""
+        now = time.time()
         with self._lock:
-            cur = self._conn.execute("DELETE FROM results WHERE fetched_at < ?", (cutoff,))
-        return cur.rowcount
+            cur = self._conn.execute("DELETE FROM results WHERE fetched_at < ?", (now - max_age_seconds,))
+            removed = cur.rowcount
+            if price_max_age_seconds is not None:
+                removed += self._conn.execute("DELETE FROM prices WHERE seen_at < ?", (now - price_max_age_seconds,)).rowcount
+        self._hot = {k: v for k, v in self._hot.items() if v[0] >= now - max_age_seconds}
+        return removed
 
     def close(self) -> None:
         with self._lock:

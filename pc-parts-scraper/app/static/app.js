@@ -16,7 +16,7 @@
   const RETAILER_COLOURS = {
     scan: "#e4002b", overclockers: "#ff6a00", ebuyer: "#0057b8", ccl: "#00a651",
     novatech: "#7b2cbf", awd_it: "#111827", box: "#1d4ed8", currys: "#5a2ca0",
-    newegg: "#f29a1f", amazon: "#ff9900",
+    newegg: "#f29a1f", amazon: "#ff9900", nvidia: "#76b900",
   };
   const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 
@@ -134,7 +134,7 @@
     if (l.image) { img.src = l.image; img.alt = ""; img.addEventListener("error", () => { img.remove(); thumb.classList.add("empty"); thumb.textContent = "No image"; }); }
     else { img.remove(); thumb.classList.add("empty"); thumb.textContent = "No image"; }
     const title = $(".title", frag); title.href = l.url; title.textContent = l.title; title.title = l.title;
-    $(".retailer", frag).textContent = l.retailer_name;
+    $(".retailer", frag).textContent = l.seller ? `${l.retailer_name} · sold by ${l.seller}` : l.retailer_name;
     const stock = $(".stock", frag);
     if (l.in_stock === true) { stock.textContent = "In stock"; stock.classList.add("in"); }
     else if (l.in_stock === false) { stock.textContent = "Out of stock"; stock.classList.add("out"); }

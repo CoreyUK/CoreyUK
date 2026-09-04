@@ -1,7 +1,7 @@
 import pytest
 from selectolax.parser import HTMLParser
 
-from app.scrapers.utils import extract_heuristic, extract_jsonld, extract_microdata, parse_price, stock_from_text
+from app.scrapers.utils import absolute_url, extract_heuristic, extract_jsonld, extract_microdata, parse_price, stock_from_text
 from tests.conftest import fixture
 
 
@@ -68,3 +68,19 @@ def test_heuristic_extraction_ignores_nav_and_footer():
     assert items[0].price == 104.99 and items[0].in_stock is True
     assert items[1].price == 99.95 and items[1].in_stock is False
     assert items[0].image == "https://shop.example.co.uk/i/1.jpg"
+
+
+@pytest.mark.parametrize(
+    "href, expected",
+    [
+        ("/products/x", "https://shop.example.co.uk/products/x"),
+        ("//cdn.example.com/i.jpg", "https://cdn.example.com/i.jpg"),
+        ("javascript:alert(1)", None),
+        ("data:text/html,hi", None),
+        ("JAVASCRIPT:alert(1)", None),
+        ("#", None),
+        ("", None),
+    ],
+)
+def test_absolute_url_only_allows_http(href, expected):
+    assert absolute_url("https://shop.example.co.uk/search", href) == expected

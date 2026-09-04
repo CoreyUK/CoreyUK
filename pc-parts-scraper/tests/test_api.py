@@ -22,7 +22,7 @@ async def test_index_and_static(client):
 
 async def test_retailers_and_categories(client):
     retailers = (await client.get("/api/retailers")).json()
-    assert {r["id"] for r in retailers} >= {"scan", "overclockers", "ebuyer", "ccl", "novatech", "awd_it", "box", "currys", "newegg", "amazon"}
+    assert {r["id"] for r in retailers} >= {"scan", "overclockers", "ebuyer", "ccl", "novatech", "awd_it", "box", "currys", "newegg", "amazon", "nvidia"}
     assert all(r["enabled"] for r in retailers)
     categories = (await client.get("/api/categories")).json()
     assert categories and {"label", "query"} <= set(categories[0])
@@ -33,7 +33,7 @@ async def test_search_endpoint(client):
     assert r.status_code == 200
     body = r.json()
     assert body["query"] == "ssd" and body["total"] > 0
-    assert len(body["retailers"]) == 10
+    assert len(body["retailers"]) == 11
     assert r.headers["X-RateLimit-Remaining"] == "4"
     first = body["listings"][0]
     assert {"retailer", "retailer_name", "title", "price", "url", "in_stock", "relevance"} <= set(first)
@@ -52,8 +52,37 @@ async def test_search_is_rate_limited_per_client(client):
     r = await client.get("/api/search", params={"q": "ram"})
     assert r.status_code == 429
     assert "Retry-After" in r.headers
-    other = await client.get("/api/search", params={"q": "ram"}, headers={"X-Forwarded-For": "203.0.113.9"})
-    assert other.status_code == 200
+    spoofed = await client.get("/api/search", params={"q": "ram"}, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert spoofed.status_code == 429, "X-Forwarded-For must not bypass the limit"
+
+
+async def test_other_clients_have_their_own_limit(settings, fetcher, cache):
+    app = create_app(settings, fetcher=fetcher, cache=cache)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, client=("10.0.0.1", 1)), base_url="http://test") as a:
+            for _ in range(5):
+                assert (await a.get("/api/search", params={"q": "ram"})).status_code == 200
+            assert (await a.get("/api/search", params={"q": "ram"})).status_code == 429
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, client=("10.0.0.2", 1)), base_url="http://test") as b:
+            assert (await b.get("/api/search", params={"q": "ram"})).status_code == 200
+
+
+async def test_global_search_cap(settings, fetcher, cache):
+    settings.global_search_limit_per_minute = 2
+    settings.api_rate_limit_per_minute = 100
+    app = create_app(settings, fetcher=fetcher, cache=cache)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c:
+            assert (await c.get("/api/search", params={"q": "ram"})).status_code == 200
+            assert (await c.get("/api/search", params={"q": "ram"})).status_code == 200
+            assert (await c.get("/api/search", params={"q": "ram"})).status_code == 429
+
+
+async def test_security_headers(client):
+    r = await client.get("/")
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    assert "frame-ancestors 'none'" in r.headers["Content-Security-Policy"]
+    assert (await client.get("/api/retailers")).headers["X-Frame-Options"] == "DENY"
 
 
 async def test_history_endpoint(client):

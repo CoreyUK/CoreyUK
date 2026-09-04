@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from app.scrapers import RETAILERS
-from app.search import SearchService, normalise_query, relevance
+from app.search import SearchService, hard_match, normalise_query, relevance
 from tests.conftest import fixture
 
 
@@ -25,6 +25,23 @@ def test_relevance(query, title, expected):
     assert relevance(query, title) == expected
 
 
+@pytest.mark.parametrize(
+    "query, title, expected",
+    [
+        ("rtx 5080", "ASUS TUF Gaming GeForce RTX 5080 OC 16GB", True),
+        ("rtx 5080", "MSI GeForce RTX 4070 VENTUS 2X 12GB", False),
+        ("2tb nvme", "WD Black SN850X 2TB M.2 NVMe SSD", True),
+        ("2 tb nvme", "Crucial P3 Plus 1TB NVMe SSD", False),
+        ("ryzen 7 9800x3d", "AMD Ryzen 7 9800X3D 8 Core AM5 Processor", True),
+        ("ryzen 7 9800x3d", "AMD Ryzen 7 7800X3D 8 Core AM5 Processor", False),
+        ("850w psu", "Corsair RM850e 850W 80+ Gold PSU", True),
+        ("nvme ssd", "Anything at all", True),
+    ],
+)
+def test_hard_match(query, title, expected):
+    assert hard_match(query, title) is expected
+
+
 def test_normalise_query():
     assert normalise_query("  RTX   4070\tTi ") == "rtx 4070 ti"
 
@@ -36,7 +53,7 @@ async def test_search_merges_sorts_and_caches(settings, fetcher, cache, site):
     prices = [l.price for l in result.listings]
     assert prices == sorted(prices)
     assert all(l.relevance > 0 for l in result.listings)
-    assert {s.state for s in result.retailers} == {"ok"}
+    assert {s.state for s in result.retailers} == {"ok", "empty"}  # NVIDIA feed has no SSDs
     assert len(site.calls) == len(RETAILERS)
 
     again = await service.search("SSD ")
@@ -106,3 +123,24 @@ async def test_price_history_records_changes(settings, fetcher, cache, site):
     history = await cache.history("awd_it", changed[0].url)
     assert [p["price"] for p in history] == [499.99, 519.99]
     assert history[0]["seen_at"] <= time.time()
+
+
+async def test_nvidia_store_filters_catalogue_and_reuses_it(settings, fetcher, cache, site):
+    service = SearchService(settings, fetcher, cache, RETAILERS)
+    result = await service.search("rtx 5080", ["nvidia"])
+    assert [(l.seller, l.price) for l in result.listings] == [("Overclockers UK", 1199.99), ("AWD-IT", 1219.0)]
+    assert result.retailers[0].state == "ok"
+    api_calls = [c for c in site.calls if "api.nvidia.partners" in c]
+    assert len(api_calls) == 1
+    await service.search("rtx 5090", ["nvidia"])
+    assert len([c for c in site.calls if "api.nvidia.partners" in c]) == 1, "catalogue is reused across queries"
+    nothing = await service.search("ssd", ["nvidia"])
+    assert nothing.total == 0 and nothing.retailers[0].state == "empty"
+
+
+async def test_model_numbers_must_match(settings, fetcher, cache, site):
+    service = SearchService(settings, fetcher, cache, RETAILERS)
+    result = await service.search("rtx 5080", ["awd_it", "nvidia"])
+    assert [(l.retailer, l.price) for l in result.listings] == [("nvidia", 1199.99), ("nvidia", 1219.0)]
+    result = await service.search("rtx 4070", ["awd_it", "nvidia"])
+    assert {l.retailer for l in result.listings} == {"awd_it"}

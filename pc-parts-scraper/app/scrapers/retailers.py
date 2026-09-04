@@ -8,6 +8,7 @@ which tier each retailer is currently resolving through and fix selectors if nee
 from __future__ import annotations
 
 from .base import Retailer
+from .nvidia import NvidiaStore
 from .utils import Strategy
 
 # Generic card selectors used as trailing fallbacks for most shops.
@@ -271,4 +272,6 @@ AMAZON = Retailer(
     ),
 )
 
-RETAILERS: list[Retailer] = [SCAN, OVERCLOCKERS, EBUYER, CCL, NOVATECH, AWD_IT, BOX, CURRYS, NEWEGG, AMAZON]
+NVIDIA = NvidiaStore()
+
+RETAILERS: list[Retailer] = [SCAN, OVERCLOCKERS, EBUYER, CCL, NOVATECH, AWD_IT, BOX, CURRYS, NEWEGG, AMAZON, NVIDIA]

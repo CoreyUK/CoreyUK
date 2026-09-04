@@ -1,0 +1,9 @@
+{"searchedProducts":{"featuredProduct":{"productID":"1001","productTitle":"NVIDIA GeForce RTX 5090","displayName":"NVIDIA GeForce RTX 5090","productPrice":"£1,939.00","prdStatus":"out_of_stock","gpu":"RTX 5090","manufacturer":"NVIDIA","imageURL":"https://assets.nvidia.partners/images/png/RTX5090.png","internalLink":"https://marketplace.nvidia.com/en-gb/consumer/graphics-cards/nvidia-geforce-rtx-5090/","retailers":[{"productId":"1001","productTitle":"NVIDIA GeForce RTX 5090","retailerName":"Scan","salePrice":"1939.00","stock":0,"isAvailable":false,"purchaseLink":"https://www.scan.co.uk/products/nvidia-geforce-rtx-5090-founders-edition","partnerId":"36","type":80}]},
+"productDetails":[
+ {"productID":"2002","productTitle":"ASUS TUF Gaming GeForce RTX 5080 OC 16GB","displayName":"ASUS TUF Gaming GeForce RTX 5080 OC","productPrice":"£1,199.99","prdStatus":"buy_now","gpu":"RTX 5080","manufacturer":"ASUS","imageURL":"https://assets.nvidia.partners/images/png/asus-tuf-5080.png","retailers":[
+   {"retailerName":"Overclockers UK","salePrice":"1199.99","stock":1,"isAvailable":true,"purchaseLink":"https://www.overclockers.co.uk/asus-tuf-gaming-geforce-rtx-5080-oc.html","partnerId":"12","type":80},
+   {"retailerName":"AWD-IT","salePrice":"1219.00","stock":3,"isAvailable":true,"purchaseLink":"https://www.awd-it.co.uk/asus-tuf-gaming-rtx-5080-oc.html","partnerId":"41","type":80}]},
+ {"productID":"3003","productTitle":"MSI GeForce RTX 5070 VENTUS 2X OC 12GB","productPrice":"£529.00","prdStatus":"check_availability","gpu":"RTX 5070","manufacturer":"MSI","retailers":[
+   {"retailerName":"Ebuyer","salePrice":"","isAvailable":true,"purchaseLink":"https://www.ebuyer.com/msi-rtx-5070-ventus"}]},
+ {"productID":"4004","productTitle":"Broken entry with no retailers","productPrice":"£1.00","retailers":[]}
+],"totalProducts":4}}

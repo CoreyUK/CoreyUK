@@ -1,7 +1,10 @@
 import pytest
 
 from app.scrapers import RETAILERS, get_retailer
-from tests.conftest import fixture
+from app.scrapers.nvidia import NvidiaStore
+
+CSS_RETAILERS = [r for r in RETAILERS if not isinstance(r, NvidiaStore)]
+from tests.conftest import FIXTURES, fixture
 
 EXPECTED = {
     "scan": ("Samsung 990 PRO 1TB M.2 NVMe PCIe 4.0 SSD", 119.99, True, "https://www.scan.co.uk/products/1tb-samsung-990-pro"),
@@ -48,7 +51,7 @@ def test_awd_it_uses_special_price_when_present():
     assert listings[1].in_stock is False
 
 
-@pytest.mark.parametrize("retailer", RETAILERS, ids=lambda r: r.id)
+@pytest.mark.parametrize("retailer", CSS_RETAILERS, ids=lambda r: r.id)
 def test_retailers_fall_back_to_jsonld_and_heuristics(retailer):
     listings, tier = retailer.parse(fixture("jsonld_only"))
     assert tier == "jsonld" and len(listings) == 2
@@ -59,8 +62,25 @@ def test_retailers_fall_back_to_jsonld_and_heuristics(retailer):
 
 
 def test_search_urls_encode_queries():
-    for retailer in RETAILERS:
+    for retailer in CSS_RETAILERS:
         url = retailer.search_url("rtx 4070 ti & more")
         assert url.startswith(retailer.homepage)
         assert " " not in url and "&+" not in url
         assert "rtx+4070+ti" in url
+
+
+def test_nvidia_marketplace_parses_partner_listings():
+    retailer = get_retailer("nvidia")
+    listings, tier = retailer.parse((FIXTURES / "nvidia.json").read_text(encoding="utf-8"))
+    assert tier == "api"
+    assert [(l.seller, l.price, l.in_stock) for l in listings] == [
+        ("Scan", 1939.0, False),
+        ("Overclockers UK", 1199.99, True),
+        ("AWD-IT", 1219.0, True),
+        ("Ebuyer", 529.0, True),
+    ]
+    assert listings[1].title == "ASUS TUF Gaming GeForce RTX 5080 OC 16GB"
+    assert listings[1].url == "https://www.overclockers.co.uk/asus-tuf-gaming-geforce-rtx-5080-oc.html"
+    assert listings[1].image == "https://assets.nvidia.partners/images/png/asus-tuf-5080.png"
+    assert all(l.retailer == "nvidia" for l in listings)
+    assert retailer.parse("<html>not json</html>") == ([], "none")

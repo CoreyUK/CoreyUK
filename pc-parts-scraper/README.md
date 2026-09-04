@@ -19,6 +19,7 @@ with the retailer, stock status and a link straight to the product.
 | `box` | [Box](https://www.box.co.uk) | |
 | `currys` | [Currys](https://www.currys.co.uk) | Akamai bot manager; often blocks non-browser clients |
 | `newegg` | [Newegg UK](https://www.newegg.com/global/uk-en/) | GBP storefront; includes marketplace sellers |
+| `nvidia` | [NVIDIA Store](https://marketplace.nvidia.com/en-gb/consumer/graphics-cards/) | NVIDIA's UK marketplace feed: partner retailers' price and stock for every GeForce card, shown as "sold by Scan / Overclockers UK / AWD-IT…". Graphics cards only |
 | `amazon` | [Amazon UK](https://www.amazon.co.uk) | Blocks most non-browser traffic, near-certain from cloud IPs. Works best from a home connection; the supported route is Amazon's Product Advertising API |
 
 Argos is left out: results render client-side behind bot protection, so it would
@@ -109,6 +110,7 @@ Copy `.env.example` to `.env`. Everything is optional.
 | `PER_HOST_MIN_INTERVAL_SECONDS` | `1.0` | Minimum spacing between requests to one retailer |
 | `MAX_RESULTS_PER_RETAILER` | `40` | Cap per retailer per query |
 | `API_RATE_LIMIT_PER_MINUTE` | `30` | Searches allowed per client IP per minute |
+| `GLOBAL_SEARCH_LIMIT_PER_MINUTE` | `300` | Searches allowed per minute across all clients |
 | `FORCE_REFRESH_MIN_INTERVAL_SECONDS` | `60` | Minimum gap between forced refreshes of one query |
 | `MAX_QUERY_LENGTH` | `80` | Longest accepted search |
 | `ENABLED_RETAILERS` | `all` | Comma-separated retailer ids to enable |
@@ -139,6 +141,19 @@ pytest
 ```
 
 The suite runs entirely offline against saved HTML in `tests/fixtures/`.
+
+## Hosting it publicly
+
+* Put it behind a reverse proxy with HTTPS (Caddy, nginx, Cloudflare Tunnel). Start
+  uvicorn with `--proxy-headers --forwarded-allow-ips <proxy ip>` so the per-client
+  rate limit sees real visitor addresses. Never use `*` there: the app deliberately
+  ignores `X-Forwarded-For` itself, because anyone can send that header.
+* The app is effectively a proxy that fetches from retailers on visitors' behalf. The
+  per-client and global search caps exist so a flood of requests cannot make your
+  server hammer the shops and get its IP banned. Lower them if you see blocks.
+* Responses carry a strict Content-Security-Policy, `X-Frame-Options: DENY` and
+  `nosniff`. Product links are limited to http(s). All database access is parameterised.
+* Old cached results (7 days) and price observations (90 days) are purged hourly.
 
 ## Being a good citizen
 

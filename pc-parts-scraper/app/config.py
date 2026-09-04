@@ -40,6 +40,7 @@ class Settings:
     max_results_per_retailer: int = 40
 
     api_rate_limit_per_minute: int = 30
+    global_search_limit_per_minute: int = 300
     force_refresh_min_interval_seconds: int = 60
     max_query_length: int = 80
 
@@ -66,6 +67,7 @@ class Settings:
             per_host_min_interval_seconds=float(_env("PER_HOST_MIN_INTERVAL_SECONDS", "1.0")),
             max_results_per_retailer=int(_env("MAX_RESULTS_PER_RETAILER", "40")),
             api_rate_limit_per_minute=int(_env("API_RATE_LIMIT_PER_MINUTE", "30")),
+            global_search_limit_per_minute=int(_env("GLOBAL_SEARCH_LIMIT_PER_MINUTE", "300")),
             force_refresh_min_interval_seconds=int(_env("FORCE_REFRESH_MIN_INTERVAL_SECONDS", "60")),
             max_query_length=int(_env("MAX_QUERY_LENGTH", "80")),
             enabled_retailers=retailers or ["all"],

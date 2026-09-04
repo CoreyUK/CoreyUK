@@ -68,7 +68,9 @@ def absolute_url(base: str, href: str | None) -> str | None:
         return None
     if href.startswith("//"):
         href = "https:" + href
-    return urljoin(base, href)
+    resolved = urljoin(base, href)
+    # Product links are rendered as clickable hrefs; never pass through javascript:/data: etc.
+    return resolved if resolved.lower().startswith(("http://", "https://")) else None
 
 
 def _resolve(root: Node, spec: str) -> tuple[Node | None, str | None]:

@@ -41,6 +41,16 @@ def relevance(query: str, title: str) -> float:
     return hits / len(q)
 
 
+def hard_match(query: str, title: str) -> bool:
+    """Words that look like model numbers or sizes (5080, 9800x3d, 2tb, 850w) must all appear."""
+    t = _tokens(title)
+    joined = "".join(t)
+    for token in _tokens(query):
+        if len(token) >= 3 and any(ch.isdigit() for ch in token) and token not in t and token not in joined:
+            return False
+    return True
+
+
 class SearchService:
     def __init__(self, settings: Settings, fetcher: Fetcher, cache: ResultCache, retailers: list[Retailer]) -> None:
         self.settings = settings
@@ -60,7 +70,7 @@ class SearchService:
             listings.extend(items)
             statuses.append(status)
         listings = [self._score(query, item) for item in listings]
-        listings = [item for item in listings if item.relevance > 0]
+        listings = [item for item in listings if item.relevance > 0 and hard_match(query, item.title)]
         listings.sort(key=lambda item: (item.price, -item.relevance))
         return SearchResponse(
             query=query,

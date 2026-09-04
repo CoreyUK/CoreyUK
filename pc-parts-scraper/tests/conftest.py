@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import httpx
@@ -39,6 +40,11 @@ class FakeSite:
     def handler(self, request: httpx.Request) -> httpx.Response:
         host = request.url.host
         self.calls.append(str(request.url))
+        if host == "api.nvidia.partners":
+            override = self.overrides.get("nvidia")
+            if isinstance(override, Exception):
+                raise override
+            return override or httpx.Response(200, json=json.loads((FIXTURES / "nvidia.json").read_text(encoding="utf-8")))
         for retailer in RETAILERS:
             if retailer.homepage.split("/")[2] == host:
                 override = self.overrides.get(retailer.id)
@@ -67,3 +73,13 @@ def cache(settings: Settings) -> ResultCache:
     c = ResultCache(settings.cache_db_path, settings.cache_ttl_seconds)
     yield c
     c.close()
+
+
+@pytest.fixture(autouse=True)
+def _reset_marketplace_catalogue():
+    """The NVIDIA source caches its catalogue in-process; start every test cold."""
+    from app.scrapers.retailers import NVIDIA
+
+    NVIDIA._catalogue = None
+    yield
+    NVIDIA._catalogue = None
