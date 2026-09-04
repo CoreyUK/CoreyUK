@@ -1,0 +1,16 @@
+services:
+  parts:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CACHE_DB_PATH: /srv/data/cache.sqlite3
+    volumes:
+      - parts-data:/srv/data
+    restart: unless-stopped
+
+volumes:
+  parts-data:
