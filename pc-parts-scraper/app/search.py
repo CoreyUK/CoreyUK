@@ -109,9 +109,11 @@ class SearchService:
         try:
             items, tier = await asyncio.wait_for(retailer.search(self.fetcher, query), timeout=self.settings.retailer_timeout_seconds + 1)
             items = items[: self.settings.max_results_per_retailer]
-            previous = await self.cache.record_prices(items)
+            previous, lowest = await self.cache.record_prices(items)
             for item in items:
                 item.previous_price = previous.get(item.url)
+                low = lowest.get(item.url)
+                item.lowest_price = low if low is not None and low < item.price - 0.005 else None
             now = time.time()
             await self.cache.put(retailer.id, query, items)
             ms = int((time.monotonic() - started) * 1000)

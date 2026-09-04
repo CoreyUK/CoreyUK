@@ -44,6 +44,11 @@ class Settings:
     force_refresh_min_interval_seconds: int = 60
     max_query_length: int = 80
 
+    warm_top_queries: int = 20
+    warm_min_hits: int = 2
+    warm_categories: bool = True
+    warm_interval_seconds: int = 60
+
     enabled_retailers: list[str] = field(default_factory=lambda: ["all"])
     debug_dump_dir: str = ""
 
@@ -70,6 +75,10 @@ class Settings:
             global_search_limit_per_minute=int(_env("GLOBAL_SEARCH_LIMIT_PER_MINUTE", "300")),
             force_refresh_min_interval_seconds=int(_env("FORCE_REFRESH_MIN_INTERVAL_SECONDS", "60")),
             max_query_length=int(_env("MAX_QUERY_LENGTH", "80")),
+            warm_top_queries=int(_env("WARM_TOP_QUERIES", "20")),
+            warm_min_hits=int(_env("WARM_MIN_HITS", "2")),
+            warm_categories=_env("WARM_CATEGORIES", "true").lower() in ("1", "true", "yes", "on"),
+            warm_interval_seconds=int(_env("WARM_INTERVAL_SECONDS", "60")),
             enabled_retailers=retailers or ["all"],
             debug_dump_dir=_env("DEBUG_DUMP_DIR", ""),
             user_agent=_env("USER_AGENT", cls.user_agent),

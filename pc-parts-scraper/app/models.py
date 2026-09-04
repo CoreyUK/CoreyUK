@@ -18,6 +18,7 @@ class Listing(BaseModel):
     in_stock: bool | None = None
     seller: str | None = None  # partner shop when a listing comes via a marketplace (e.g. NVIDIA Store)
     previous_price: float | None = None
+    lowest_price: float | None = None  # lowest price ever observed for this listing
     relevance: float = 0.0
 
 

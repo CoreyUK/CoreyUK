@@ -27,6 +27,8 @@ def settings() -> Settings:
         per_host_min_interval_seconds=0.0,
         api_rate_limit_per_minute=5,
         force_refresh_min_interval_seconds=60,
+        warm_top_queries=0,
+        warm_categories=False,
     )
 
 

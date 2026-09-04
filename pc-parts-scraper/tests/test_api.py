@@ -90,4 +90,14 @@ async def test_history_endpoint(client):
     url = body["listings"][0]["url"]
     r = await client.get("/api/history", params={"retailer": "awd_it", "url": url})
     assert r.status_code == 200
-    assert len(r.json()["points"]) == 1
+    h = r.json()
+    assert len(h["points"]) == 1
+    assert h["current"] == h["lowest"] == h["highest"] == body["listings"][0]["price"]
+    assert h["changes"] == 0 and h["first_seen"] == h["points"][0]["seen_at"]
+    empty = (await client.get("/api/history", params={"retailer": "scan", "url": "https://www.scan.co.uk/nope"})).json()
+    assert empty["points"] == [] and empty["current"] is None
+
+
+async def test_health_reports_warmer(client):
+    body = (await client.get("/api/health")).json()
+    assert body["warm"]["enabled"] is False

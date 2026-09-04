@@ -9,7 +9,9 @@
     minPrice: $("#min-price"), maxPrice: $("#max-price"), inStock: $("#in-stock"),
     retailerList: $("#retailer-list"), retailerCount: $("#retailer-count"), skeleton: $("#skeleton"),
     empty: $("#empty"), list: $("#list"), more: $("#more-btn"), error: $("#error"),
-    rate: $("#rate-remaining"), theme: $("#theme-toggle"), rowTpl: $("#row-tpl"),
+    rate: $("#rate-remaining"), theme: $("#theme-toggle"), rowTpl: $("#row-tpl"), copy: $("#copy-btn"),
+    dialog: $("#history-dialog"), hTitle: $("#history-title"), hSub: $("#history-sub"), hStats: $("#history-stats"),
+    hChart: $("#history-chart"), hTip: $("#history-tooltip"), hTable: $("#history-table tbody"), hClose: $("#history-close"),
   };
 
   const PAGE_SIZE = 40;
@@ -148,8 +150,11 @@
       was.innerHTML = `<span class="${dir}">${dir === "down" ? "▼" : "▲"} ${gbp.format(diff)}</span> was ${gbp.format(l.previous_price)}`;
     } else if (cheapest) {
       was.innerHTML = `<span class="badge-cheapest">Cheapest</span>`;
+    } else if (l.lowest_price && l.lowest_price < l.price - 0.005) {
+      was.textContent = `lowest seen ${gbp.format(l.lowest_price)}`;
     }
     $(".view", frag).href = l.url;
+    $(".history-btn", frag).addEventListener("click", () => openHistory(l));
     return frag;
   };
 
@@ -233,7 +238,139 @@
     }
   }
 
+  // ---------- copy link ----------
+  const copyLink = async () => {
+    const url = location.href;
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; } catch {}
+    if (!ok) {
+      const tmp = Object.assign(document.createElement("input"), { value: url });
+      document.body.append(tmp); tmp.select();
+      try { ok = document.execCommand("copy"); } catch {}
+      tmp.remove();
+    }
+    const label = $("span", els.copy);
+    label.textContent = ok ? "Copied!" : "Copy failed";
+    els.copy.classList.toggle("done", ok);
+    setTimeout(() => { label.textContent = "Copy link"; els.copy.classList.remove("done"); }, 1800);
+  };
+
+  // ---------- price history ----------
+  const fmtDate = (ts, withTime = false) => new Date(ts * 1000).toLocaleString("en-GB", withTime
+    ? { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }
+    : { day: "numeric", month: "short", year: "numeric" });
+  const stat = (label, value, small = false) => `<div class="stat"><div class="label">${label}</div><div class="value${small ? " small" : ""}">${value}</div></div>`;
+
+  const renderHistoryChart = (points) => {
+    els.hChart.replaceChildren();
+    els.hTip.hidden = true;
+    if (!points.length) {
+      els.hChart.innerHTML = `<div class="empty-msg">No price history yet. Prices are recorded every time this product is fetched.</div>`;
+      return;
+    }
+    // A step series: each observation holds until the next; extend the last one to "now".
+    const now = Date.now() / 1000;
+    const series = [...points, { price: points[points.length - 1].price, seen_at: Math.max(now, points[points.length - 1].seen_at + 60) }];
+    const W = 640, H = 220, padL = 56, padR = 72, padT = 16, padB = 28;
+    const xs = series.map((p) => p.seen_at), ys = series.map((p) => p.price);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    // Snap the y range to round tick values so the axis reads £500, £520, £540 rather than £569.14.
+    let lo = Math.min(...ys), hi = Math.max(...ys);
+    if (hi - lo < 1) { lo -= 5; hi += 5; } else { const pad = (hi - lo) * 0.15; lo -= pad; hi += pad; }
+    lo = Math.max(0, lo);
+    const ticks = 4;
+    const rawStep = (hi - lo) / ticks;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= rawStep) || 10 * mag;
+    const y0 = Math.floor(lo / step) * step, y1 = Math.ceil(hi / step) * step;
+    const sx = (t) => padL + ((t - x0) / Math.max(1, x1 - x0)) * (W - padL - padR);
+    const sy = (v) => padT + (1 - (v - y0) / (y1 - y0)) * (H - padT - padB);
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    const el = (tag, attrs = {}, text) => { const n = document.createElementNS(svgNS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); if (text != null) n.textContent = text; return n; };
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Price over time" });
+
+    // Recessive hairline grid with y labels.
+    for (let v = y0; v <= y1 + step / 1000; v += step) {
+      svg.append(el("line", { class: "grid", x1: padL, x2: W - padR, y1: sy(v), y2: sy(v) }));
+      svg.append(el("text", { class: "axis-label", x: padL - 8, y: sy(v) + 4, "text-anchor": "end" }, gbp.format(v)));
+    }
+    // Two or three x labels.
+    const xTicks = x1 - x0 > 0 ? [x0, (x0 + x1) / 2, x1] : [x0];
+    xTicks.forEach((t, i) => svg.append(el("text", { class: "axis-label", x: sx(t), y: H - 8, "text-anchor": i === 0 ? "start" : i === xTicks.length - 1 ? "end" : "middle" }, fmtDate(t))));
+
+    // Step path + light area.
+    let d = `M${sx(series[0].seen_at)},${sy(series[0].price)}`;
+    for (let i = 1; i < series.length; i++) d += ` H${sx(series[i].seen_at)} V${sy(series[i].price)}`;
+    const baseline = sy(y0);
+    svg.append(el("path", { class: "area", d: `${d} V${baseline} H${sx(series[0].seen_at)} Z` }));
+    svg.append(el("path", { class: "series", d }));
+    points.forEach((p) => svg.append(el("circle", { class: "marker", cx: sx(p.seen_at), cy: sy(p.price), r: 4 })));
+    // Direct label on the current value only.
+    const last = series[series.length - 1];
+    svg.append(el("text", { class: "end-label", x: sx(last.seen_at) + 8, y: sy(last.price) + 4 }, gbp.format(last.price)));
+
+    // Hover: crosshair + tooltip showing the price in force at that time.
+    const cursor = el("line", { class: "cursor", y1: padT, y2: H - padB, x1: 0, x2: 0 });
+    const dot = el("circle", { class: "cursor-dot", r: 5 });
+    svg.append(cursor, dot);
+    const onMove = (evt) => {
+      const rect = svg.getBoundingClientRect();
+      const t = x0 + ((evt.clientX - rect.left) / rect.width * W - padL) / (W - padL - padR) * (x1 - x0);
+      if (t < x0 || t > x1) return;
+      let active = points[0];
+      for (const p of points) if (p.seen_at <= t) active = p;
+      cursor.setAttribute("x1", sx(t)); cursor.setAttribute("x2", sx(t)); cursor.style.opacity = 1;
+      dot.setAttribute("cx", sx(t)); dot.setAttribute("cy", sy(active.price)); dot.style.opacity = 1;
+      els.hTip.innerHTML = `<strong>${gbp.format(active.price)}</strong><br>${fmtDate(t, true)}`;
+      els.hTip.hidden = false;
+      const px = (sx(t) / W) * rect.width, py = (sy(active.price) / H) * rect.height;
+      const flip = py < 56;  // near the top: show the tooltip below the point instead of over the stat tiles
+      els.hTip.style.left = `${Math.min(Math.max(px, 70), rect.width - 70)}px`;
+      els.hTip.style.top = `${flip ? py + 14 : py - 10}px`;
+      els.hTip.style.transform = flip ? "translate(-50%, 0)" : "translate(-50%, -100%)";
+    };
+    svg.addEventListener("mousemove", onMove);
+    svg.addEventListener("mouseleave", () => { cursor.style.opacity = 0; dot.style.opacity = 0; els.hTip.hidden = true; });
+    els.hChart.append(svg);
+  };
+
+  async function openHistory(l) {
+    els.hTitle.textContent = l.title;
+    els.hSub.textContent = l.seller ? `${l.retailer_name} · sold by ${l.seller}` : l.retailer_name;
+    els.hStats.innerHTML = "";
+    els.hChart.innerHTML = `<div class="empty-msg">Loading…</div>`;
+    els.hTable.replaceChildren();
+    if (!els.dialog.open) els.dialog.showModal();
+    try {
+      const res = await fetch(`/api/history?${new URLSearchParams({ retailer: l.retailer, url: l.url })}`);
+      if (!res.ok) throw new Error(`History unavailable (${res.status})`);
+      const h = await res.json();
+      const pts = h.points || [];
+      els.hStats.innerHTML =
+        stat("Current", gbp.format(h.current ?? l.price)) +
+        stat("Lowest seen", h.lowest != null ? gbp.format(h.lowest) : "–") +
+        stat("Highest seen", h.highest != null ? gbp.format(h.highest) : "–") +
+        stat("Tracking since", h.first_seen ? fmtDate(h.first_seen) : "–", true) +
+        stat("Price changes", String(h.changes ?? 0));
+      renderHistoryChart(pts);
+      const rows = pts.map((p, i) => {
+        const prev = i > 0 ? pts[i - 1].price : null;
+        const diff = prev == null ? null : p.price - prev;
+        const cls = diff == null ? "" : diff < 0 ? "down" : "up";
+        const change = diff == null ? "first seen" : `${diff < 0 ? "▼" : "▲"} ${gbp.format(Math.abs(diff))}`;
+        return `<tr><td>${fmtDate(p.seen_at, true)}</td><td>${gbp.format(p.price)}</td><td class="${cls}">${change}</td></tr>`;
+      }).reverse();
+      els.hTable.innerHTML = rows.join("");
+    } catch (err) {
+      els.hChart.innerHTML = `<div class="empty-msg">${err.message || "Could not load history."}</div>`;
+    }
+  }
+  els.hClose.addEventListener("click", () => els.dialog.close());
+  els.dialog.addEventListener("click", (e) => { if (e.target === els.dialog) els.dialog.close(); });
+
   // ---------- wiring ----------
+  els.copy.addEventListener("click", copyLink);
   els.form.addEventListener("submit", (e) => { e.preventDefault(); runSearch(els.q.value); });
   els.q.addEventListener("input", () => { els.clear.hidden = !els.q.value; });
   els.clear.addEventListener("click", () => { els.q.value = ""; els.clear.hidden = true; els.q.focus(); });

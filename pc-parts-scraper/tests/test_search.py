@@ -120,9 +120,15 @@ async def test_price_history_records_changes(settings, fetcher, cache, site):
     changed = [l for l in second.listings if l.previous_price is not None]
     assert len(changed) == 1
     assert changed[0].price == 499.99 and changed[0].previous_price == 519.99
+    assert changed[0].lowest_price is None, "current price is the lowest seen, so no hint"
     history = await cache.history("awd_it", changed[0].url)
-    assert [p["price"] for p in history] == [499.99, 519.99]
-    assert history[0]["seen_at"] <= time.time()
+    assert [p["price"] for p in history] == [519.99, 499.99], "oldest first"
+    assert history[-1]["seen_at"] <= time.time()
+
+    site.overrides["awd_it"] = httpx.Response(200, text=fixture("awd_it"))  # back up to 519.99
+    third = await service.search("rtx", ["awd_it"], force=True)
+    back = [l for l in third.listings if l.url == changed[0].url][0]
+    assert back.price == 519.99 and back.previous_price == 499.99 and back.lowest_price == 499.99
 
 
 async def test_nvidia_store_filters_catalogue_and_reuses_it(settings, fetcher, cache, site):
@@ -144,3 +150,48 @@ async def test_model_numbers_must_match(settings, fetcher, cache, site):
     assert [(l.retailer, l.price) for l in result.listings] == [("nvidia", 1199.99), ("nvidia", 1219.0)]
     result = await service.search("rtx 4070", ["awd_it", "nvidia"])
     assert {l.retailer for l in result.listings} == {"awd_it"}
+
+
+async def test_warmer_refreshes_popular_and_seed_queries(settings, fetcher, cache, site):
+    from app.warm import Warmer
+
+    settings.warm_top_queries = 5
+    settings.warm_min_hits = 2
+    settings.warm_categories = True
+    service = SearchService(settings, fetcher, cache, RETAILERS)
+    for _ in range(2):
+        cache.bump_query_sync("rtx 5080")
+    cache.bump_query_sync("only once")
+    warmer = Warmer(settings, service, cache, ["2tb nvme ssd"])
+    assert warmer.enabled
+    assert warmer.candidates() == ["2tb nvme ssd", "rtx 5080"]
+
+    refreshed = await warmer.run_once()
+    assert refreshed == ["2tb nvme ssd", "rtx 5080"]
+    calls_after_first = len(site.calls)
+    assert calls_after_first > 0
+    assert warmer.last_run is not None and warmer.status()["tracked"] == 2
+
+    # Nothing is due again straight away, so no new outbound requests.
+    assert await warmer.run_once() == []
+    assert len(site.calls) == calls_after_first
+
+    # A visitor searching a warmed query gets it straight from the cache.
+    result = await service.search("rtx 5080")
+    assert all(s.state == "cached" for s in result.retailers)
+    assert len(site.calls) == calls_after_first
+
+
+def test_query_stats_and_age(cache):
+    cache.bump_query_sync("ssd")
+    cache.bump_query_sync("ssd")
+    cache.bump_query_sync("ram")
+    assert cache.top_queries_sync(10) == ["ssd", "ram"]
+    assert cache.top_queries_sync(10, min_hits=2) == ["ssd"]
+    assert cache.top_queries_sync(0) == []
+    assert cache.query_age_sync("ssd", expected_retailers=2) is None
+    cache.put_sync("scan", "ssd", [])
+    assert cache.query_age_sync("ssd", expected_retailers=2) is None, "one retailer missing"
+    cache.put_sync("ebuyer", "ssd", [])
+    age = cache.query_age_sync("ssd", expected_retailers=2)
+    assert age is not None and 0 <= age < 5

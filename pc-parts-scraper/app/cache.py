@@ -28,6 +28,12 @@ CREATE TABLE IF NOT EXISTS prices (
     seen_at   REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS prices_url ON prices(retailer, url, seen_at);
+
+CREATE TABLE IF NOT EXISTS query_stats (
+    query         TEXT PRIMARY KEY,
+    hits          INTEGER NOT NULL DEFAULT 0,
+    last_searched REAL NOT NULL
+);
 """
 
 
@@ -90,40 +96,78 @@ class ResultCache:
         return now - fetched_at < self.ttl
 
     # ----- price history -----------------------------------------------------------
-    def record_prices_sync(self, listings: list[Listing]) -> dict[str, float]:
-        """Store observations and return previous prices keyed by url where the price changed."""
+    def record_prices_sync(self, listings: list[Listing]) -> tuple[dict[str, float], dict[str, float]]:
+        """Store observations. Returns (previous price where it changed, lowest price ever seen), keyed by url."""
         if not listings:
-            return {}
+            return {}, {}
         now = time.time()
         previous: dict[str, float] = {}
+        lowest: dict[str, float] = {}
         with self._lock:
             for item in listings:
                 row = self._conn.execute(
-                    "SELECT price FROM prices WHERE retailer = ? AND url = ? ORDER BY seen_at DESC LIMIT 1",
-                    (item.retailer, item.url),
+                    "SELECT price, (SELECT MIN(price) FROM prices WHERE retailer = ? AND url = ?) "
+                    "FROM prices WHERE retailer = ? AND url = ? ORDER BY seen_at DESC LIMIT 1",
+                    (item.retailer, item.url, item.retailer, item.url),
                 ).fetchone()
-                if row is None or abs(row[0] - item.price) >= 0.005:
+                last_price = row[0] if row is not None else None
+                if row is not None:
+                    lowest[item.url] = min(row[1], item.price)
+                if last_price is None or abs(last_price - item.price) >= 0.005:
                     self._conn.execute(
                         "INSERT INTO prices(retailer, url, title, price, seen_at) VALUES (?,?,?,?,?)",
                         (item.retailer, item.url, item.title, item.price, now),
                     )
-                    if row is not None:
-                        previous[item.url] = row[0]
-        return previous
+                    if last_price is not None:
+                        previous[item.url] = last_price
+        return previous, lowest
 
-    async def record_prices(self, listings: list[Listing]) -> dict[str, float]:
+    async def record_prices(self, listings: list[Listing]) -> tuple[dict[str, float], dict[str, float]]:
         return await asyncio.to_thread(self.record_prices_sync, listings)
 
-    def history_sync(self, retailer: str, url: str, limit: int = 50) -> list[dict[str, float]]:
+    def history_sync(self, retailer: str, url: str, limit: int = 200) -> list[dict[str, float]]:
+        """Price observations, oldest first (a new row is only written when the price changes)."""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT price, seen_at FROM prices WHERE retailer = ? AND url = ? ORDER BY seen_at DESC LIMIT ?",
+                "SELECT price, seen_at FROM (SELECT price, seen_at FROM prices WHERE retailer = ? AND url = ? "
+                "ORDER BY seen_at DESC LIMIT ?) ORDER BY seen_at ASC",
                 (retailer, url, limit),
             ).fetchall()
         return [{"price": price, "seen_at": seen_at} for price, seen_at in rows]
 
-    async def history(self, retailer: str, url: str, limit: int = 50) -> list[dict[str, float]]:
+    async def history(self, retailer: str, url: str, limit: int = 200) -> list[dict[str, float]]:
         return await asyncio.to_thread(self.history_sync, retailer, url, limit)
+
+    # ----- query popularity (drives background warming) ----------------------------
+    def bump_query_sync(self, query: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO query_stats(query, hits, last_searched) VALUES (?, 1, ?) "
+                "ON CONFLICT(query) DO UPDATE SET hits = hits + 1, last_searched = excluded.last_searched",
+                (query, time.time()),
+            )
+
+    async def bump_query(self, query: str) -> None:
+        await asyncio.to_thread(self.bump_query_sync, query)
+
+    def top_queries_sync(self, limit: int, min_hits: int = 1, max_age_seconds: float = 7 * 24 * 3600) -> list[str]:
+        if limit <= 0:
+            return []
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT query FROM query_stats WHERE hits >= ? AND last_searched >= ? "
+                "ORDER BY hits DESC, last_searched DESC LIMIT ?",
+                (min_hits, time.time() - max_age_seconds, limit),
+            ).fetchall()
+        return [row[0] for row in rows]
+
+    def query_age_sync(self, query: str, expected_retailers: int) -> float | None:
+        """Seconds since the oldest cached retailer result for a query; None if any retailer is missing."""
+        with self._lock:
+            row = self._conn.execute("SELECT MIN(fetched_at), COUNT(*) FROM results WHERE query = ?", (query,)).fetchone()
+        if row is None or row[0] is None or row[1] < expected_retailers:
+            return None
+        return time.time() - row[0]
 
     # ----- maintenance -------------------------------------------------------------
     def purge_sync(self, max_age_seconds: float, price_max_age_seconds: float | None = None) -> int:
@@ -134,6 +178,7 @@ class ResultCache:
             removed = cur.rowcount
             if price_max_age_seconds is not None:
                 removed += self._conn.execute("DELETE FROM prices WHERE seen_at < ?", (now - price_max_age_seconds,)).rowcount
+                self._conn.execute("DELETE FROM query_stats WHERE last_searched < ?", (now - 30 * 24 * 3600,))
         self._hot = {k: v for k, v in self._hot.items() if v[0] >= now - max_age_seconds}
         return removed
 

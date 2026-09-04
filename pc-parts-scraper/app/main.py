@@ -20,6 +20,7 @@ from .models import RetailerInfo, SearchResponse
 from .ratelimit import MinIntervalGate, SlidingWindowLimiter
 from .scrapers import RETAILERS, enabled_retailers
 from .search import SearchService, normalise_query
+from .warm import Warmer
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -59,10 +60,14 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
                 await asyncio.sleep(3600)
 
         purge_task = asyncio.create_task(housekeeping())
+        app.state.warmer = Warmer(settings, app.state.service, app.state.cache, [c["query"] for c in CATEGORIES])
+        warm_task = asyncio.create_task(app.state.warmer.loop()) if app.state.warmer.enabled else None
         try:
             yield
         finally:
             purge_task.cancel()
+            if warm_task is not None:
+                warm_task.cancel()
             await app.state.fetcher.close()
             app.state.cache.close()
 
@@ -110,7 +115,12 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
 
     @app.get("/api/health")
     async def health(request: Request) -> dict[str, object]:
-        return {"status": "ok", "time": time.time(), "retailers": len(request.app.state.service.retailers)}
+        return {
+            "status": "ok",
+            "time": time.time(),
+            "retailers": len(request.app.state.service.retailers),
+            "warm": request.app.state.warmer.status(),
+        }
 
     @app.get("/api/retailers", response_model=list[RetailerInfo])
     async def retailers(request: Request) -> list[RetailerInfo]:
@@ -145,12 +155,25 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
         force = False
         if refresh:
             force, _wait = request.app.state.refresh_gate.allow(query)
+        if not ids:  # only full searches feed the popularity list used for background warming
+            asyncio.create_task(request.app.state.cache.bump_query(query))
         return await service.search(query, ids, force=force)
 
     @app.get("/api/history")
-    async def history(request: Request, retailer: str = Query(...), url: str = Query(..., max_length=2048)) -> dict[str, object]:
+    async def history(request: Request, retailer: str = Query(..., max_length=32), url: str = Query(..., max_length=2048)) -> dict[str, object]:
         cache: ResultCache = request.app.state.cache
-        return {"retailer": retailer, "url": url, "points": await cache.history(retailer, url)}
+        points = await cache.history(retailer, url)
+        prices = [p["price"] for p in points]
+        return {
+            "retailer": retailer,
+            "url": url,
+            "points": points,
+            "current": prices[-1] if prices else None,
+            "lowest": min(prices) if prices else None,
+            "highest": max(prices) if prices else None,
+            "first_seen": points[0]["seen_at"] if points else None,
+            "changes": max(0, len(points) - 1),
+        }
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

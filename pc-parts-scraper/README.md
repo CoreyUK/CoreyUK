@@ -93,9 +93,17 @@ browser ──> FastAPI (/api/search) ──> SearchService
 * **Limits**: outbound requests are throttled per host so no retailer sees a burst,
   inbound searches are limited per client IP (`429` with `Retry-After`), query length
   and per-retailer result counts are capped.
-* **Price history**: every fresh fetch records price observations, so a listing shows
-  "▼ £20 was £539.99" when a price has moved since it was last seen. `/api/history`
-  returns the observations for a product URL.
+* **Price history**: every fresh fetch records price observations. A listing shows
+  "▼ £20 was £539.99" when a price has moved since it was last seen and "lowest seen
+  £499" when it has been cheaper before. The History button on each row opens a chart
+  of every recorded price with current / lowest / highest and a table view.
+* **Always warm**: a background loop re-runs the most popular searches (plus the
+  category shortcuts) just before their cache expires, so common queries are answered
+  instantly from cache and price history builds up even when nobody is searching.
+  Tune with `WARM_*` settings; set `WARM_TOP_QUERIES=0` and `WARM_CATEGORIES=false`
+  to disable.
+* **Copy link**: every search has a shareable URL (query, retailer filter and sort),
+  and the page carries Open Graph tags so links preview cleanly in Discord.
 
 ## Configuration
 
@@ -113,6 +121,10 @@ Copy `.env.example` to `.env`. Everything is optional.
 | `GLOBAL_SEARCH_LIMIT_PER_MINUTE` | `300` | Searches allowed per minute across all clients |
 | `FORCE_REFRESH_MIN_INTERVAL_SECONDS` | `60` | Minimum gap between forced refreshes of one query |
 | `MAX_QUERY_LENGTH` | `80` | Longest accepted search |
+| `WARM_TOP_QUERIES` | `20` | Popular searches (last 7 days) kept warm in the background; `0` disables |
+| `WARM_MIN_HITS` | `2` | A search must have been run this many times to be kept warm |
+| `WARM_CATEGORIES` | `true` | Also keep the category shortcut searches warm |
+| `WARM_INTERVAL_SECONDS` | `60` | How often the warmer checks what is due |
 | `ENABLED_RETAILERS` | `all` | Comma-separated retailer ids to enable |
 | `DEBUG_DUMP_DIR` | | Save every fetched page here (debugging) |
 
@@ -121,7 +133,7 @@ Copy `.env.example` to `.env`. Everything is optional.
 * `GET /api/search?q=rtx+4070&retailers=scan,ebuyer&refresh=1`
 * `GET /api/retailers`
 * `GET /api/categories`
-* `GET /api/history?retailer=scan&url=...`
+* `GET /api/history?retailer=scan&url=...` → observations (oldest first), current, lowest, highest, first_seen
 * `GET /api/health`
 
 ## Adding a retailer
@@ -153,7 +165,8 @@ The suite runs entirely offline against saved HTML in `tests/fixtures/`.
   server hammer the shops and get its IP banned. Lower them if you see blocks.
 * Responses carry a strict Content-Security-Policy, `X-Frame-Options: DENY` and
   `nosniff`. Product links are limited to http(s). All database access is parameterised.
-* Old cached results (7 days) and price observations (90 days) are purged hourly.
+* Old cached results (7 days), price observations (90 days) and query stats (30 days) are purged hourly.
+* The warmer adds steady background traffic: roughly (warm queries × retailers) requests per cache TTL. With the defaults that is about 28 queries × 11 retailers every 15 minutes. Lower `WARM_TOP_QUERIES` or raise `CACHE_TTL_SECONDS` if a retailer starts blocking.
 
 ## Being a good citizen
 
