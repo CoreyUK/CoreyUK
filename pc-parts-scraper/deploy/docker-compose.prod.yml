@@ -1,0 +1,45 @@
+# Production stack for a VPS: the app plus a Cloudflare Tunnel.
+#
+#   cd deploy
+#   cp .env.prod.example .env.prod   # fill in TUNNEL_TOKEN
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# The app publishes NO ports. The only way in is through cloudflared on the private
+# compose network, so Cloudflare terminates TLS and your VPS firewall can stay closed.
+
+services:
+  parts:
+    build: ..
+    restart: unless-stopped
+    env_file:
+      - path: .env.prod
+        required: false
+    environment:
+      CACHE_DB_PATH: /srv/data/cache.sqlite3
+    volumes:
+      - parts-data:/srv/data
+    # --proxy-headers lets uvicorn take the visitor's real IP from X-Forwarded-For, which
+    # cloudflared sets. Trusting every source ('*') is safe ONLY because this service has
+    # no published ports: nothing but cloudflared on this network can reach it.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:?Set TUNNEL_TOKEN in .env.prod}
+    depends_on:
+      parts:
+        condition: service_healthy
+    networks: [edge]
+
+networks:
+  edge:
+
+volumes:
+  parts-data:

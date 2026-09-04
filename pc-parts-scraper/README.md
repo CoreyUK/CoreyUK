@@ -156,6 +156,10 @@ The suite runs entirely offline against saved HTML in `tests/fixtures/`.
 
 ## Hosting it publicly
 
+For a VPS behind Cloudflare (no open ports, TLS handled at the edge) see
+[`deploy/README.md`](deploy/README.md). It covers the tunnel, DNS and an edge rate
+limit, by dashboard or Terraform.
+
 * Put it behind a reverse proxy with HTTPS (Caddy, nginx, Cloudflare Tunnel). Start
   uvicorn with `--proxy-headers --forwarded-allow-ips <proxy ip>` so the per-client
   rate limit sees real visitor addresses. Never use `*` there: the app deliberately

@@ -6,3 +6,4 @@ venv/
 data/*.sqlite3*
 data/dumps/
 .env
+deploy/.env.prod
