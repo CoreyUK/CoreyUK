@@ -15,7 +15,7 @@ async def client(settings, fetcher, cache):
 
 async def test_index_and_static(client):
     r = await client.get("/")
-    assert r.status_code == 200 and "PartsPrice" in r.text
+    assert r.status_code == 200 and "Shep's Parts" in r.text
     assert (await client.get("/static/app.js")).status_code == 200
     assert (await client.get("/static/styles.css")).status_code == 200
 

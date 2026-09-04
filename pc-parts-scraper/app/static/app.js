@@ -200,7 +200,7 @@
     els.results.hidden = false;
     showError("");
     if (push) writeUrl(query);
-    document.title = `${query} · PartsPrice UK`;
+    document.title = `${query} · Shep's Parts`;
 
     if (state.controller) state.controller.abort();
     const controller = new AbortController();

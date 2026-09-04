@@ -1,4 +1,4 @@
-# PartsPrice UK
+# Shep's Parts
 
 Search UK PC component retailers in one place and see who has the part cheapest.
 Type "rtx 5070", "2tb nvme" or "ryzen 7 9800x3d", get one sorted price list back,
