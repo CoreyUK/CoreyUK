@@ -1,12 +1,12 @@
-# Deploying to a VPS at pcparts.shep.rip
+# Deploying to a VPS at parts.shep.rip
 
-Result: `https://pcparts.shep.rip` served through Cloudflare, with the app running in
+Result: `https://parts.shep.rip` served through Cloudflare, with the app running in
 Docker on your VPS and **no inbound ports open** on the VPS at all. Cloudflare handles
 TLS, the tunnel carries traffic out from the VPS to Cloudflare, and a rate-limit rule at
 the edge backs up the app's own limits.
 
 ```
-visitor ──HTTPS──> Cloudflare (pcparts.shep.rip) ──tunnel──> cloudflared ──> parts:8000
+visitor ──HTTPS──> Cloudflare (parts.shep.rip) ──tunnel──> cloudflared ──> parts:8000
                      TLS, WAF, rate limit           outbound only        docker network
 ```
 
@@ -21,13 +21,13 @@ visitor ──HTTPS──> Cloudflare (pcparts.shep.rip) ──tunnel──> clo
 ### Route A: dashboard (5 minutes, no tooling)
 
 1. Cloudflare dashboard → **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel**
-   → *Cloudflared* → name it `pcparts`.
+   → *Cloudflared* → name it `parts`.
 2. On the *Install connector* screen ignore the install commands, just copy the long
    **token** from the docker command shown (the string after `--token`).
 3. **Public Hostname** tab → **Add a public hostname**:
-   * Subdomain `pcparts`, Domain `shep.rip`
+   * Subdomain `parts`, Domain `shep.rip`
    * Type `HTTP`, URL `parts:8000`
-4. Save. Cloudflare creates the `pcparts.shep.rip` DNS record for you.
+4. Save. Cloudflare creates the `parts.shep.rip` DNS record for you.
 
 ### Route B: Terraform (repeatable, also adds the edge rate limit)
 
@@ -53,7 +53,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 docker compose -f docker-compose.prod.yml logs -f cloudflared   # wait for "Registered tunnel connection"
 ```
 
-Open https://pcparts.shep.rip. Then run the probe from the VPS to see which retailers
+Open https://parts.shep.rip. Then run the probe from the VPS to see which retailers
 answer from that IP (some block datacentre ranges):
 
 ```bash

@@ -1,4 +1,4 @@
-# Cloudflare side of pcparts.shep.rip: a named tunnel, its ingress, the DNS record and an
+# Cloudflare side of parts.shep.rip: a named tunnel, its ingress, the DNS record and an
 # edge rate-limit on the search API.
 #
 # Usage
@@ -36,16 +36,16 @@ resource "random_id" "tunnel_secret" {
   byte_length = 32
 }
 
-resource "cloudflare_tunnel" "pcparts" {
+resource "cloudflare_tunnel" "parts" {
   account_id = var.account_id
   name       = var.tunnel_name
   secret     = random_id.tunnel_secret.b64_std
   config_src = "cloudflare"
 }
 
-resource "cloudflare_tunnel_config" "pcparts" {
+resource "cloudflare_tunnel_config" "parts" {
   account_id = var.account_id
-  tunnel_id  = cloudflare_tunnel.pcparts.id
+  tunnel_id  = cloudflare_tunnel.parts.id
 
   config {
     ingress_rule {
@@ -64,11 +64,11 @@ resource "cloudflare_tunnel_config" "pcparts" {
 
 # --- DNS ----------------------------------------------------------------------------
 
-resource "cloudflare_record" "pcparts" {
+resource "cloudflare_record" "parts" {
   zone_id = var.zone_id
   name    = var.subdomain
   type    = "CNAME"
-  content = "${cloudflare_tunnel.pcparts.id}.cfargotunnel.com"
+  content = "${cloudflare_tunnel.parts.id}.cfargotunnel.com"
   proxied = true
   ttl     = 1
   comment = "PC parts price search, served via Cloudflare Tunnel"
@@ -80,7 +80,7 @@ resource "cloudflare_record" "pcparts" {
 
 resource "cloudflare_ruleset" "rate_limit" {
   zone_id     = var.zone_id
-  name        = "pcparts rate limits"
+  name        = "parts.shep.rip rate limits"
   description = "Slow down abusive clients before they reach the origin"
   kind        = "zone"
   phase       = "http_ratelimit"

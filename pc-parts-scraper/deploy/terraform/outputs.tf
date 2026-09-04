@@ -3,11 +3,11 @@ output "hostname" {
 }
 
 output "tunnel_id" {
-  value = cloudflare_tunnel.pcparts.id
+  value = cloudflare_tunnel.parts.id
 }
 
 output "tunnel_token" {
   description = "Paste into deploy/.env.prod as TUNNEL_TOKEN."
-  value       = cloudflare_tunnel.pcparts.tunnel_token
+  value       = cloudflare_tunnel.parts.tunnel_token
   sensitive   = true
 }

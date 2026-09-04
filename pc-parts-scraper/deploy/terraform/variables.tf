@@ -15,12 +15,12 @@ variable "zone_name" {
 
 variable "subdomain" {
   type    = string
-  default = "pcparts"
+  default = "parts"
 }
 
 variable "tunnel_name" {
   type    = string
-  default = "pcparts"
+  default = "parts"
 }
 
 variable "origin_service" {
