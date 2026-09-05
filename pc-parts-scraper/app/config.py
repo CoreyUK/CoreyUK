@@ -49,6 +49,8 @@ class Settings:
     warm_categories: bool = True
     warm_interval_seconds: int = 60
 
+    feeds_config: str = "feeds.json"
+
     enabled_retailers: list[str] = field(default_factory=lambda: ["all"])
     debug_dump_dir: str = ""
 
@@ -79,6 +81,7 @@ class Settings:
             warm_min_hits=int(_env("WARM_MIN_HITS", "2")),
             warm_categories=_env("WARM_CATEGORIES", "true").lower() in ("1", "true", "yes", "on"),
             warm_interval_seconds=int(_env("WARM_INTERVAL_SECONDS", "60")),
+            feeds_config=_env("FEEDS_CONFIG", "feeds.json"),
             enabled_retailers=retailers or ["all"],
             debug_dump_dir=_env("DEBUG_DUMP_DIR", ""),
             user_agent=_env("USER_AGENT", cls.user_agent),

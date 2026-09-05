@@ -18,7 +18,9 @@ from .config import Settings
 from .fetcher import Fetcher
 from .models import RetailerInfo, SearchResponse
 from .ratelimit import MinIntervalGate, SlidingWindowLimiter
-from .scrapers import RETAILERS, enabled_retailers
+from .feeds import FeedStore
+from .scrapers import RETAILERS
+from .sources import SourceRegistry
 from .search import SearchService, normalise_query
 from .warm import Warmer
 
@@ -37,7 +39,13 @@ CATEGORIES = [
 ]
 
 
-def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = None, cache: ResultCache | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    fetcher: Fetcher | None = None,
+    cache: ResultCache | None = None,
+    feed_store: FeedStore | None = None,
+) -> FastAPI:
     settings = settings or Settings.from_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -46,7 +54,9 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
         app.state.settings = settings
         app.state.fetcher = fetcher or Fetcher(settings)
         app.state.cache = cache or ResultCache(settings.cache_db_path, settings.cache_ttl_seconds)
-        app.state.service = SearchService(settings, app.state.fetcher, app.state.cache, enabled_retailers(settings))
+        app.state.feed_store = feed_store or FeedStore(settings.cache_db_path)
+        app.state.registry = SourceRegistry(settings, app.state.feed_store)
+        app.state.service = SearchService(settings, app.state.fetcher, app.state.cache, app.state.registry)
         app.state.limiter = SlidingWindowLimiter(settings.api_rate_limit_per_minute, 60.0)
         app.state.global_limiter = SlidingWindowLimiter(settings.global_search_limit_per_minute, 60.0)
         app.state.refresh_gate = MinIntervalGate(settings.force_refresh_min_interval_seconds)
@@ -70,6 +80,8 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
                 warm_task.cancel()
             await app.state.fetcher.close()
             app.state.cache.close()
+            if feed_store is None:
+                app.state.feed_store.close()
 
     app = FastAPI(title="UK PC Parts Price Search", version="0.1.0", lifespan=lifespan, docs_url="/api/docs", redoc_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=1024)
@@ -120,12 +132,31 @@ def create_app(settings: Settings | None = None, *, fetcher: Fetcher | None = No
             "time": time.time(),
             "retailers": len(request.app.state.service.retailers),
             "warm": request.app.state.warmer.status(),
+            "feeds": request.app.state.feed_store.stats_sync(),
         }
 
     @app.get("/api/retailers", response_model=list[RetailerInfo])
     async def retailers(request: Request) -> list[RetailerInfo]:
         cfg: Settings = request.app.state.settings
-        return [RetailerInfo(id=r.id, name=r.name, homepage=r.homepage, enabled=cfg.retailer_enabled(r.id)) for r in RETAILERS]
+        live = {r.id: r for r in request.app.state.service.retailers}
+        known = {r.id: r for r in RETAILERS}
+        infos = [
+            RetailerInfo(
+                id=r.id,
+                name=r.name,
+                homepage=r.homepage or (known[r.id].homepage if r.id in known else ""),
+                enabled=cfg.retailer_enabled(r.id),
+                source="feed" if getattr(r, "is_local", False) else "scrape",
+            )
+            for r in live.values()
+        ]
+        # Shops that are configured but currently switched off still belong in the list.
+        infos += [
+            RetailerInfo(id=r.id, name=r.name, homepage=r.homepage, enabled=False, source="scrape")
+            for r in RETAILERS
+            if r.id not in live
+        ]
+        return infos
 
     @app.get("/api/categories")
     async def categories() -> list[dict[str, str]]:

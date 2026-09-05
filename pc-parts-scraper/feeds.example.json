@@ -1,0 +1,37 @@
+{
+  "//": "Copy to feeds.json and put your real feed URL in. feeds.json is git-ignored because the URL contains your API key.",
+  "feeds": [
+    {
+      "id": "awin",
+      "//url": "Awin > Toolbox > Create-a-Feed. Pick every merchant you are approved for, choose CSV + gzip, and paste the generated URL here.",
+      "url": "https://productdata.awin.com/datafeed/download/apikey/YOUR_API_KEY/language/en/fid/1234,5678/columns/merchant_name,merchant_product_id,product_name,description,merchant_category,search_price,currency,aw_deep_link,merchant_image_url,in_stock,stock_quantity,brand_name,mpn,ean,delivery_cost/format/csv/delim/%2C/compression/gzip/",
+
+      "//profile": "auto detects Awin or Google Shopping column names. Force one with 'awin' or 'google'.",
+      "profile": "auto",
+
+      "//retailer_map": "Maps the merchant name in the feed to the retailer ids this app already knows, so feed results replace scraping for that shop and keep its proper name and colour. Anything unmapped still works, it just gets an id derived from its name.",
+      "retailer_map": {
+        "Scan Computers International Ltd": "scan",
+        "Overclockers UK": "overclockers",
+        "Ebuyer": "ebuyer",
+        "CCL Computers": "ccl",
+        "Novatech": "novatech",
+        "AWD-IT": "awd_it",
+        "Box.co.uk": "box",
+        "Currys": "currys"
+      },
+
+      "//exclude_pattern": "Optional regex. Big merchants list everything they sell; this keeps washing machines out of a PC parts site.",
+      "exclude_pattern": "(washing machine|dishwasher|fridge|freezer|tumble dryer|microwave|kettle|toaster|vacuum|television|hoover)",
+
+      "//include_pattern": "Optional regex. The opposite: keep only rows that match, e.g. '(gpu|graphics card|ssd|cpu|processor|motherboard|memory|ram|psu|power supply|cooler|case)'.",
+      "include_pattern": "",
+
+      "//currency": "Rows in any other currency are skipped. Set to '' to accept all.",
+      "currency": "GBP",
+
+      "//max_rows": "0 means no limit. Useful while testing.",
+      "max_rows": 0
+    }
+  ]
+}

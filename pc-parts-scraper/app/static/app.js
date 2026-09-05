@@ -10,6 +10,7 @@
     retailerList: $("#retailer-list"), retailerCount: $("#retailer-count"), skeleton: $("#skeleton"),
     empty: $("#empty"), list: $("#list"), more: $("#more-btn"), error: $("#error"),
     rate: $("#rate-remaining"), theme: $("#theme-toggle"), rowTpl: $("#row-tpl"), copy: $("#copy-btn"),
+    affiliate: $("#affiliate-note"),
     dialog: $("#history-dialog"), hTitle: $("#history-title"), hSub: $("#history-sub"), hStats: $("#history-stats"),
     hChart: $("#history-chart"), hTip: $("#history-tooltip"), hTable: $("#history-table tbody"), hClose: $("#history-close"),
   };
@@ -396,6 +397,8 @@
       ]);
       state.retailers = retailers;
       els.retailerCount.textContent = String(retailers.filter((r) => r.enabled).length);
+      // Only claim affiliate links when at least one shop actually comes from a feed.
+      els.affiliate.hidden = !retailers.some((r) => r.source === "feed" && r.enabled);
       els.categories.replaceChildren(...categories.map((c) => {
         const b = Object.assign(document.createElement("button"), { type: "button", className: "chip", textContent: c.label });
         b.addEventListener("click", () => runSearch(c.query));

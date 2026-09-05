@@ -236,6 +236,7 @@ button { cursor: pointer; }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 .foot { text-align: center; font-size: 12.5px; padding: 18px; border-top: 1px solid var(--border); }
+.foot #affiliate-note { display: block; margin-top: 4px; }
 
 @media (max-width: 860px) {
   .layout { grid-template-columns: 1fr; }

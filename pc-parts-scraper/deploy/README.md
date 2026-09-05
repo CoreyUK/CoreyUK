@@ -75,6 +75,32 @@ docker compose -f docker-compose.prod.yml exec parts python -m scripts.probe "rt
   want it, add `https://static.cloudflareinsights.com` to `script-src` and `connect-src`
   in `app/main.py` (`_secure`).
 
+## Keeping the product feeds fresh
+
+If you use affiliate feeds (see the main README), import them daily. Add to the VPS
+crontab (`crontab -e`), adjusting the path:
+
+```cron
+# Import affiliate product feeds at 05:20 every morning
+20 5 * * * cd /home/YOU/pc-parts-scraper/deploy && docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T parts python -m scripts.import_feeds >> /var/log/parts-feeds.log 2>&1
+```
+
+Feeds usually refresh once or twice a day, so more often than that gains nothing. Check
+it worked with:
+
+```bash
+docker compose -f docker-compose.prod.yml exec parts python -m scripts.import_feeds --list
+```
+
+`feeds.json` must be readable inside the container. Either bake it in by placing it in
+the repo root before `--build`, or mount it by adding to the `parts` service:
+
+```yaml
+    volumes:
+      - parts-data:/srv/data
+      - ../feeds.json:/srv/feeds.json:ro
+```
+
 ## Updating
 
 ```bash

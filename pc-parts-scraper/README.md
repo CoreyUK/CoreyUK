@@ -43,6 +43,67 @@ Or with Docker:
 docker compose up --build
 ```
 
+## Affiliate product feeds (recommended)
+
+Scraping is the fallback, not the goal. If you are approved on an affiliate network,
+import its product feed instead: one scheduled download replaces every live request,
+searches answer from local SQLite in milliseconds, nothing can block you, and you get
+the whole catalogue plus EAN/MPN codes, stock and delivery cost.
+
+**A feed-backed retailer automatically replaces its scraper.** Anything not in a feed
+keeps being scraped, so you can migrate one shop at a time.
+
+### Setting it up
+
+1. In Awin, go to **Toolbox → Create-a-Feed**. Select every merchant you are approved
+   for, choose **CSV** format with **gzip** compression, and include at least these
+   columns: `merchant_name`, `merchant_product_id`, `product_name`, `merchant_category`,
+   `search_price`, `currency`, `aw_deep_link`, `merchant_image_url`, `in_stock`,
+   `stock_quantity`, `brand_name`, `mpn`, `ean`, `delivery_cost`. Copy the generated URL.
+2. `cp feeds.example.json feeds.json`, paste the URL in, and check `retailer_map` uses
+   the merchant names exactly as they appear in your Awin account. `feeds.json` is
+   git-ignored because the URL contains your API key.
+3. Import:
+
+```bash
+python -m scripts.import_feeds --dry-run   # parse and report, write nothing
+python -m scripts.import_feeds             # for real
+python -m scripts.import_feeds --list      # what is loaded, and when
+```
+
+```
+awin: imported 48211 products, skipped 1350 (22.4s)
+    scan                   14022
+    ebuyer                 11890
+    overclockers            9455
+```
+
+Then schedule it daily (`deploy/README.md` has a cron line). The running app notices a
+new import within a minute; no restart needed.
+
+### Feed settings
+
+Each entry in `feeds.json` accepts:
+
+| Key | Meaning |
+|-----|---------|
+| `id` | Name for this feed. Re-importing replaces everything from the same id |
+| `url` / `path` | Download it, or read a local file (testing) |
+| `profile` | `auto` (default), `awin` or `google`. Auto-detects from the header row |
+| `retailer_map` | Merchant name → retailer id, so feed rows take over from that scraper |
+| `retailer_name` | Fixed shop name for a single-merchant feed with no merchant column |
+| `include_pattern` / `exclude_pattern` | Regex on title + category to keep or drop rows |
+| `currency` | Rows in other currencies are skipped (default `GBP`) |
+| `max_rows`, `delimiter`, `encoding` | Escape hatches for awkward feeds |
+
+Gzip and zip are handled automatically. If the importer cannot find a column it needs,
+it says so and lists the columns the feed actually has.
+
+### Amazon and Newegg
+
+Not on Awin. Amazon needs its own Product Advertising API (Associates account plus
+three qualifying sales), Newegg runs through Impact. Both keep scraping in the meantime.
+
 ## Check the scrapers against the live sites
 
 Retail sites change their markup without warning, so before relying on it run the
@@ -131,7 +192,7 @@ Copy `.env.example` to `.env`. Everything is optional.
 ## API
 
 * `GET /api/search?q=rtx+4070&retailers=scan,ebuyer&refresh=1`
-* `GET /api/retailers`
+* `GET /api/retailers` → each shop with `source: "feed"` or `"scrape"`
 * `GET /api/categories`
 * `GET /api/history?retailer=scan&url=...` → observations (oldest first), current, lowest, highest, first_seen
 * `GET /api/health`

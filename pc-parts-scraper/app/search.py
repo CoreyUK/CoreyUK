@@ -5,6 +5,7 @@ import asyncio
 import logging
 import re
 import time
+from typing import Any
 
 from .cache import ResultCache
 from .config import Settings
@@ -52,12 +53,18 @@ def hard_match(query: str, title: str) -> bool:
 
 
 class SearchService:
-    def __init__(self, settings: Settings, fetcher: Fetcher, cache: ResultCache, retailers: list[Retailer]) -> None:
+    def __init__(self, settings: Settings, fetcher: Fetcher, cache: ResultCache, retailers: "list[Retailer] | Any") -> None:
         self.settings = settings
         self.fetcher = fetcher
         self.cache = cache
-        self.retailers = retailers
+        # Either a fixed list or a SourceRegistry, which re-reads the feed store periodically.
+        self._retailers = retailers
         self._inflight: dict[str, asyncio.Task[tuple[list[Listing], RetailerStatus]]] = {}
+
+    @property
+    def retailers(self) -> list[Retailer]:
+        provider = getattr(self._retailers, "retailers", None)
+        return provider() if callable(provider) else self._retailers
 
     # ----- public --------------------------------------------------------------------
     async def search(self, raw_query: str, retailer_ids: list[str] | None = None, *, force: bool = False) -> SearchResponse:
@@ -88,7 +95,10 @@ class SearchService:
         return item
 
     async def _search_one(self, retailer: Retailer, query: str, force: bool) -> tuple[list[Listing], RetailerStatus]:
-        cached = await self.cache.get(retailer.id, query)
+        # A feed-backed retailer answers from local SQLite, so caching it would only
+        # serve older data than the store already holds.
+        local = getattr(retailer, "is_local", False)
+        cached = None if local else await self.cache.get(retailer.id, query)
         if cached is not None and not force and self.cache.is_fresh(cached[0]):
             fetched_at, items = cached
             return [i.model_copy() for i in items], RetailerStatus(
@@ -115,7 +125,8 @@ class SearchService:
                 low = lowest.get(item.url)
                 item.lowest_price = low if low is not None and low < item.price - 0.005 else None
             now = time.time()
-            await self.cache.put(retailer.id, query, items)
+            if not getattr(retailer, "is_local", False):
+                await self.cache.put(retailer.id, query, items)
             ms = int((time.monotonic() - started) * 1000)
             state = "ok" if items else "empty"
             return items, RetailerStatus(id=retailer.id, name=retailer.name, state=state, count=len(items), ms=ms, fetched_at=now, message=f"via {tier}")

@@ -46,3 +46,4 @@ class RetailerInfo(BaseModel):
     name: str
     homepage: str
     enabled: bool
+    source: Literal["feed", "scrape"] = "scrape"
