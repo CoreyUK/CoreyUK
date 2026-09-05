@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 from app.config import Settings
 from app.feeds import FeedConfig, FeedImporter, FeedStore, load_feed_configs
+from app.feeds.importer import Counter
 
 
 def _ago(ts: float) -> str:
@@ -79,20 +80,23 @@ def main() -> int:
     for config in configs:
         if args.dry_run:
             started = time.monotonic()
+            counter = Counter()
+            samples = []
             try:
-                products, skipped = importer.parse(config, importer.fetch(config))
+                with importer.download(config) as path:
+                    for product in importer.parse(config, path, counter):
+                        if len(samples) < 3:
+                            samples.append(product)
             except Exception as exc:
                 print(f"{config.id}: FAILED {exc.__class__.__name__}: {exc}", file=sys.stderr)
                 failures += 1
                 continue
-            by_retailer: dict[str, int] = {}
-            for product in products:
-                by_retailer[product.retailer] = by_retailer.get(product.retailer, 0) + 1
-            print(f"{config.id}: would import {len(products)} products, skipping {skipped} ({time.monotonic() - started:.1f}s)")
-            for retailer_id, count in sorted(by_retailer.items(), key=lambda kv: -kv[1]):
+            print(f"{config.id}: would import {counter.kept} products, skipping {counter.skipped} ({time.monotonic() - started:.1f}s)")
+            for retailer_id, count in sorted(counter.retailers.items(), key=lambda kv: -kv[1]):
                 print(f"    {retailer_id:<20}{count:>8}")
-            for product in products[:3]:
-                print(f"    e.g. £{product.price:>8.2f}  {product.title[:64]}")
+            for product in samples:
+                stock = {True: "in stock", False: "out of stock", None: "stock unknown"}[product.in_stock]
+                print(f"    e.g. £{product.price:>8.2f}  {stock:<14} {product.title[:56]}")
             continue
 
         result = importer.run(config)

@@ -12,9 +12,12 @@ import gzip
 import io
 import json
 import logging
+import os
 import re
+import tempfile
 import time
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
@@ -29,8 +32,8 @@ log = logging.getLogger(__name__)
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _TRUE = {"1", "y", "yes", "true", "in stock", "instock", "available", "in_stock"}
 _FALSE = {"0", "n", "no", "false", "out of stock", "outofstock", "oos", "unavailable", "preorder", "backorder"}
-# Feeds are big; refuse to sit and stream forever if a URL turns out to be wrong.
-_MAX_BYTES = 512 * 1024 * 1024
+# Feeds are streamed to disk, but stop runaway downloads from filling a small VPS.
+_MAX_BYTES = 4 * 1024 * 1024 * 1024
 
 
 def slug(value: str) -> str:
@@ -111,6 +114,15 @@ def load_feed_configs(path: str) -> list[FeedConfig]:
 
 
 @dataclass(slots=True)
+class Counter:
+    """Running totals while a feed streams past."""
+
+    kept: int = 0
+    skipped: int = 0
+    retailers: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class ImportResult:
     source: str
     rows: int = 0
@@ -124,16 +136,25 @@ class ImportResult:
         return not self.error
 
 
-def _decompress(name: str, raw: bytes) -> str:
-    if raw[:2] == b"\x1f\x8b":
-        raw = gzip.decompress(raw)
-    elif raw[:2] == b"PK":
-        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+@contextmanager
+def _open_text(path: Path, encoding: str) -> Iterator[Iterator[str]]:
+    """Open a feed for reading, transparently handling gzip and zip, without
+    loading it into memory. Real combined feeds run to several GB."""
+    with open(path, "rb") as probe:
+        magic = probe.read(2)
+    if magic == b"\x1f\x8b":
+        with gzip.open(path, "rt", encoding=encoding, errors="replace", newline="") as handle:
+            yield handle
+    elif magic == b"PK":
+        with zipfile.ZipFile(path) as archive:
             inner = next((n for n in archive.namelist() if n.lower().endswith((".csv", ".txt", ".tsv"))), None)
             if inner is None:
-                raise ValueError(f"{name}: zip contains no csv file")
-            raw = archive.read(inner)
-    return raw.decode("utf-8-sig", errors="replace")
+                raise ValueError(f"{path.name}: zip contains no csv file")
+            with archive.open(inner) as raw:
+                yield io.TextIOWrapper(raw, encoding=encoding, errors="replace", newline="")
+    else:
+        with open(path, "rt", encoding=encoding, errors="replace", newline="") as handle:
+            yield handle
 
 
 class FeedImporter:
@@ -142,41 +163,36 @@ class FeedImporter:
         self._timeout = timeout
         self._client = client
 
-    def fetch(self, config: FeedConfig) -> str:
+    @contextmanager
+    def download(self, config: FeedConfig) -> Iterator[Path]:
+        """Yield a local path for the feed, downloading to a temp file when needed."""
         if config.path:
-            raw = Path(config.path).read_bytes()
-            return _decompress(config.path, raw)
+            yield Path(config.path)
+            return
         client = self._client or httpx.Client(timeout=self._timeout, follow_redirects=True)
+        handle, temp_name = tempfile.mkstemp(prefix=f"feed_{config.id}_", suffix=".dat")
+        temp = Path(temp_name)
         try:
-            chunks: list[bytes] = []
             total = 0
-            with client.stream("GET", config.url) as response:
+            with os.fdopen(handle, "wb") as sink, client.stream("GET", config.url) as response:
                 response.raise_for_status()
-                for chunk in response.iter_bytes():
+                for chunk in response.iter_bytes(chunk_size=1 << 20):
                     total += len(chunk)
                     if total > _MAX_BYTES:
-                        raise ValueError(f"{config.id}: feed exceeds {_MAX_BYTES // (1024 * 1024)}MB, check the URL")
-                    chunks.append(chunk)
-            return _decompress(config.id, b"".join(chunks))
+                        raise ValueError(
+                            f"{config.id}: feed is larger than {_MAX_BYTES // (1024 * 1024)}MB. "
+                            "Narrow the advertiser or category selection in Create-a-Feed."
+                        )
+                    sink.write(chunk)
+            log.info("%s: downloaded %.1f MB", config.id, total / (1024 * 1024))
+            yield temp
         finally:
+            temp.unlink(missing_ok=True)
             if self._client is None:
                 client.close()
 
-    def parse(self, config: FeedConfig, text: str) -> tuple[list[FeedProduct], int]:
-        sample = text[:8192]
-        delimiter = config.delimiter
-        if not delimiter:
-            try:
-                delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
-            except csv.Error:
-                delimiter = ","
-        reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
-        headers = reader.fieldnames or []
-        if not headers:
-            raise ValueError(f"{config.id}: feed has no header row")
+    def _columns(self, config: FeedConfig, headers: list[str]) -> tuple[Profile, dict[str, str | None]]:
         profile = PROFILES[config.profile] if config.profile in PROFILES else detect(headers)
-        log.info("%s: %d columns, using the %s column layout", config.id, len(headers), profile.name)
-
         lookup = {h.strip().lower(): h for h in headers}
         columns = {
             name: next((lookup[c.lower()] for c in candidates if c.lower() in lookup), None)
@@ -188,15 +204,47 @@ class FeedImporter:
                 f"{config.id}: feed is missing a column for {', '.join(missing)}. "
                 f"Columns present: {', '.join(sorted(lookup))}"
             )
+        absent = [name for name in ("in_stock", "brand", "mpn", "ean") if columns[name] is None]
+        if absent:
+            log.warning(
+                "%s: feed has no %s column(s); add them in Create-a-Feed for stock badges and product matching",
+                config.id, ", ".join(absent),
+            )
+        return profile, columns
 
+    def _delimiter(self, config: FeedConfig, path: Path) -> str:
+        if config.delimiter:
+            return config.delimiter
+        with _open_text(path, config.encoding) as stream:
+            sample = stream.read(8192)
+        try:
+            return csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
+        except csv.Error:
+            return ","
+
+    def parse(self, config: FeedConfig, path: Path, counter: "Counter | None" = None) -> Iterator[FeedProduct]:
+        """Stream products out of a feed file, counting rows dropped along the way."""
+        counter = Counter() if counter is None else counter
+        delimiter = self._delimiter(config, path)
         include = re.compile(config.include_pattern, re.IGNORECASE) if config.include_pattern else None
         exclude = re.compile(config.exclude_pattern, re.IGNORECASE) if config.exclude_pattern else None
         want_currency = (config.currency or "").strip().upper()
 
-        products: list[FeedProduct] = []
         seen: set[str] = set()
-        skipped = 0
-        for index, row in enumerate(reader):
+        with _open_text(path, config.encoding) as stream:
+            reader = csv.DictReader(stream, delimiter=delimiter)
+            headers = reader.fieldnames or []
+            if not headers:
+                raise ValueError(f"{config.id}: feed has no header row")
+            profile, columns = self._columns(config, headers)
+            log.info("%s: %d columns, using the %s column layout", config.id, len(headers), profile.name)
+
+            for row in reader:
+                yield from self._row(config, row, columns, include, exclude, want_currency, seen, counter)
+                if config.max_rows and counter.kept >= config.max_rows:
+                    break
+
+    def _row(self, config, row, columns, include, exclude, want_currency, seen, counter) -> Iterator[FeedProduct]:
             def cell(name: str) -> str | None:
                 column = columns[name]
                 if column is None:
@@ -206,61 +254,58 @@ class FeedImporter:
 
             title, url, price = cell("title"), cell("url"), parse_money(cell("price"))
             if not title or not url or price is None:
-                skipped += 1
-                continue
+                counter.skipped += 1
+                return
             currency = (cell("currency") or want_currency).upper()
             if want_currency and currency != want_currency:
-                skipped += 1
-                continue
+                counter.skipped += 1
+                return
             category = cell("category")
             if include and not include.search(f"{title} {category or ''}"):
-                skipped += 1
-                continue
+                counter.skipped += 1
+                return
             if exclude and exclude.search(f"{title} {category or ''}"):
-                skipped += 1
-                continue
+                counter.skipped += 1
+                return
 
             shop = cell("retailer_name") or config.retailer_name or config.id
             retailer_id = config.retailer_map.get(shop) or config.retailer_map.get(shop.lower()) or slug(shop)
             external_id = cell("external_id") or url
             key = f"{retailer_id}\x00{external_id}"
             if key in seen:
-                skipped += 1
-                continue
+                counter.skipped += 1
+                return
             seen.add(key)
 
-            products.append(
-                FeedProduct(
-                    source=config.id,
-                    retailer=retailer_id,
-                    retailer_name=shop,
-                    external_id=external_id,
-                    title=title,
-                    price=price,
-                    url=url,
-                    image=cell("image"),
-                    in_stock=parse_stock(cell("in_stock"), cell("stock_quantity")),
-                    brand=cell("brand"),
-                    mpn=cell("mpn"),
-                    ean=cell("ean"),
-                    category=category,
-                    delivery_cost=parse_money(cell("delivery_cost")),
-                )
+            counter.kept += 1
+            counter.retailers[retailer_id] = counter.retailers.get(retailer_id, 0) + 1
+            yield FeedProduct(
+                source=config.id,
+                retailer=retailer_id,
+                retailer_name=shop,
+                external_id=external_id,
+                title=title,
+                price=price,
+                url=url,
+                image=cell("image"),
+                in_stock=parse_stock(cell("in_stock"), cell("stock_quantity")),
+                brand=cell("brand"),
+                mpn=cell("mpn"),
+                ean=cell("ean"),
+                category=category,
+                delivery_cost=parse_money(cell("delivery_cost")),
             )
-            if config.max_rows and len(products) >= config.max_rows:
-                break
-        return products, skipped
 
     def run(self, config: FeedConfig) -> ImportResult:
         started = time.monotonic()
         result = ImportResult(source=config.id)
+        counter = Counter()
         try:
-            products, skipped = self.parse(config, self.fetch(config))
-            self.store.replace_source_sync(config.id, products, skipped)
-            result.rows = len(products)
-            result.skipped = skipped
-            for product in products:
-                result.retailers[product.retailer] = result.retailers.get(product.retailer, 0) + 1
+            with self.download(config) as path:
+                self.store.replace_source_sync(config.id, self.parse(config, path, counter), lambda: counter.skipped)
+            result.rows = counter.kept
+            result.skipped = counter.skipped
+            result.retailers = dict(counter.retailers)
         except Exception as exc:
             result.error = f"{exc.__class__.__name__}: {exc}"
             log.error("%s: import failed: %s", config.id, result.error)

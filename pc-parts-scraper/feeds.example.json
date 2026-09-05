@@ -3,8 +3,9 @@
   "feeds": [
     {
       "id": "awin",
-      "//url": "Awin > Toolbox > Create-a-Feed. Pick every merchant you are approved for, choose CSV + gzip, and paste the generated URL here.",
-      "url": "https://productdata.awin.com/datafeed/download/apikey/YOUR_API_KEY/language/en/fid/1234,5678/columns/merchant_name,merchant_product_id,product_name,description,merchant_category,search_price,currency,aw_deep_link,merchant_image_url,in_stock,stock_quantity,brand_name,mpn,ean,delivery_cost/format/csv/delim/%2C/compression/gzip/",
+      "//url": "Awin > Toolbox > Create-a-Feed. Select ONLY the PC retailers you care about, no brand filter, and tick the columns listed below. CSV + gzip. Then paste the generated URL here.",
+      "//columns": "Must include: aw_deep_link, product_name, merchant_product_id, merchant_name, search_price, currency, merchant_image_url, merchant_category. Strongly recommended: in_stock, stock_quantity (stock badges), brand_name, mpn, ean (matching the same product across shops). Without in_stock every listing reads 'Stock unknown'.",
+      "url": "https://productdata.awin.com/datafeed/download/apikey/YOUR_API_KEY/language/en/fid/1234,5678/columns/aw_deep_link,product_name,merchant_product_id,merchant_name,merchant_category,search_price,currency,merchant_image_url,in_stock,stock_quantity,brand_name,mpn,ean,delivery_cost/format/csv/delimiter/%2C/compression/gzip/adultcontent/0/",
 
       "//profile": "auto detects Awin or Google Shopping column names. Force one with 'awin' or 'google'.",
       "profile": "auto",

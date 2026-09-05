@@ -7,7 +7,9 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
+from typing import Callable, Iterable
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS feed_products (
@@ -95,36 +97,55 @@ class FeedStore:
         self._lock = threading.Lock()
 
     # ----- import ------------------------------------------------------------------
-    def replace_source_sync(self, source: str, products: list[FeedProduct], skipped: int = 0) -> int:
-        """Swap in a source's products atomically, so searches never see a half-written feed."""
+    def replace_source_sync(
+        self,
+        source: str,
+        products: Iterable[FeedProduct],
+        skipped: int | Callable[[], int] = 0,
+        batch_size: int = 5000,
+    ) -> int:
+        """Swap in a source's products atomically, so searches never see a half-written
+        feed. Products are consumed in batches, so a multi-GB feed never has to fit in
+        memory."""
         now = time.time()
+        insert = (
+            "INSERT OR REPLACE INTO feed_products(source, retailer, retailer_name, external_id, title, price,"
+            " url, image, in_stock, brand, mpn, ean, category, delivery_cost, updated_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        )
+        stream = iter(products)
+        written = 0
         with self._lock:
             self._conn.execute("BEGIN IMMEDIATE")
             try:
                 self._conn.execute("DELETE FROM feed_products WHERE source = ?", (source,))
-                self._conn.executemany(
-                    "INSERT OR REPLACE INTO feed_products(source, retailer, retailer_name, external_id, title, price,"
-                    " url, image, in_stock, brand, mpn, ean, category, delivery_cost, updated_at)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    [
-                        (
-                            p.source, p.retailer, p.retailer_name, p.external_id, p.title, p.price, p.url, p.image,
-                            None if p.in_stock is None else int(p.in_stock), p.brand, p.mpn, p.ean, p.category,
-                            p.delivery_cost, now,
-                        )
-                        for p in products
-                    ],
-                )
+                while True:
+                    batch = list(islice(stream, batch_size))
+                    if not batch:
+                        break
+                    self._conn.executemany(
+                        insert,
+                        [
+                            (
+                                p.source, p.retailer, p.retailer_name, p.external_id, p.title, p.price, p.url,
+                                p.image, None if p.in_stock is None else int(p.in_stock), p.brand, p.mpn, p.ean,
+                                p.category, p.delivery_cost, now,
+                            )
+                            for p in batch
+                        ],
+                    )
+                    written += len(batch)
+                dropped = skipped() if callable(skipped) else skipped
                 self._conn.execute(
                     "INSERT OR REPLACE INTO feed_imports(source, imported_at, rows, skipped) VALUES (?,?,?,?)",
-                    (source, now, len(products), skipped),
+                    (source, now, written, dropped),
                 )
                 self._conn.execute("INSERT INTO feed_search(feed_search) VALUES('rebuild')")
                 self._conn.execute("COMMIT")
             except Exception:
                 self._conn.execute("ROLLBACK")
                 raise
-        return len(products)
+        return written
 
     # ----- read --------------------------------------------------------------------
     def retailers_sync(self) -> list[tuple[str, str]]:

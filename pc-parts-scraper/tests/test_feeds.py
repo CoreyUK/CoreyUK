@@ -164,6 +164,28 @@ def test_failed_import_reports_but_does_not_raise(store):
     assert not result.ok and "FileNotFoundError" in result.error
 
 
+def test_streaming_parse_yields_products_without_loading_everything(store, awin_config):
+    from app.feeds.importer import Counter
+    from pathlib import Path as _Path
+
+    importer = FeedImporter(store)
+    counter = Counter()
+    with importer.download(awin_config) as path:
+        assert isinstance(path, _Path)
+        products = list(importer.parse(awin_config, path, counter))
+    assert len(products) == 8 == counter.kept
+    assert counter.skipped == 4
+    assert counter.retailers["scan"] == 2
+
+
+def test_max_rows_stops_early(store):
+    from app.feeds.importer import Counter
+
+    config = FeedConfig(id="awin", path=str(FIXTURES / "awin_feed.csv"), retailer_map=dict(AWIN_MAP), max_rows=3)
+    result = FeedImporter(store).run(config)
+    assert result.rows == 3
+
+
 def test_feed_without_required_columns_is_rejected(store, tmp_path):
     bad = tmp_path / "bad.csv"
     bad.write_text("name,cost\nThing,10\n", encoding="utf-8")

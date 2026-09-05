@@ -55,11 +55,20 @@ keeps being scraped, so you can migrate one shop at a time.
 
 ### Setting it up
 
-1. In Awin, go to **Toolbox → Create-a-Feed**. Select every merchant you are approved
-   for, choose **CSV** format with **gzip** compression, and include at least these
-   columns: `merchant_name`, `merchant_product_id`, `product_name`, `merchant_category`,
-   `search_price`, `currency`, `aw_deep_link`, `merchant_image_url`, `in_stock`,
-   `stock_quantity`, `brand_name`, `mpn`, `ean`, `delivery_cost`. Copy the generated URL.
+1. In Awin, go to **Toolbox → Create-a-Feed**.
+   * **Advertisers**: select only the shops you actually want. Awin will happily hand
+     you every programme you have joined; a feed with 150 advertisers and every category
+     ticked runs to millions of rows of clothing and homeware.
+   * **Brand**: leave empty. Filtering by brand silently drops every other manufacturer.
+   * **Format**: CSV, gzip compression, adult content off.
+   * **Columns**: `aw_deep_link`, `product_name`, `merchant_product_id`, `merchant_name`,
+     `merchant_category`, `search_price`, `currency`, `merchant_image_url`,
+     `delivery_cost`, and — important — `in_stock`, `stock_quantity`, `brand_name`,
+     `mpn`, `ean`. Without `in_stock` every listing shows "Stock unknown"; without
+     `brand_name`/`mpn`/`ean` the same product cannot be matched across shops later.
+     The importer warns you at import time if any of these are absent.
+
+   Copy the generated URL. It contains your API key, so treat it as a password.
 2. `cp feeds.example.json feeds.json`, paste the URL in, and check `retailer_map` uses
    the merchant names exactly as they appear in your Awin account. `feeds.json` is
    git-ignored because the URL contains your API key.
@@ -96,8 +105,10 @@ Each entry in `feeds.json` accepts:
 | `currency` | Rows in other currencies are skipped (default `GBP`) |
 | `max_rows`, `delimiter`, `encoding` | Escape hatches for awkward feeds |
 
-Gzip and zip are handled automatically. If the importer cannot find a column it needs,
-it says so and lists the columns the feed actually has.
+Gzip and zip are handled automatically, and feeds are streamed to a temp file and
+inserted in batches, so memory stays flat no matter how large the file is (a 400k-row
+feed imports in about 8 seconds using ~70 MB). If the importer cannot find a column it
+needs, it says so and lists the columns the feed actually has.
 
 ### Amazon and Newegg
 
