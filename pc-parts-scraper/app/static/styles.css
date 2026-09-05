@@ -58,11 +58,69 @@ button { cursor: pointer; }
   position: sticky; top: 0; z-index: 10;
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; }
+.brand-uk { color: var(--accent); }
+
+/* --- Logo: RGB channel-split glitch ------------------------------------------------
+   Two coloured copies of the wordmark sit on top of the real text and are clipped into
+   horizontal slices for a fraction of a second every few seconds. The real text is
+   never hidden, so the logo stays readable and screen readers only see it once. */
 .brand-mark {
+  position: relative;
   display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px;
   background: var(--accent); color: var(--accent-ink); font-weight: 800;
+  animation: mark-flicker 7s steps(1, end) infinite;
 }
-.brand-uk { color: var(--accent); }
+.brand-mark::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(transparent 46%, rgba(255, 255, 255, 0.5) 47%, transparent 48%);
+  opacity: 0; animation: mark-scan 7s linear infinite;
+}
+.glitch { position: relative; display: inline-block; }
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute; top: 0; left: 0; width: 100%;
+  pointer-events: none; opacity: 0;
+  text-shadow: none;
+}
+.glitch::before { color: #00e5ff; animation: glitch-a 7s steps(1, end) infinite; }
+.glitch::after { color: #ff2d6f; animation: glitch-b 7s steps(1, end) infinite; }
+/* Hover replays the burst immediately and a little harder. */
+.brand:hover .glitch::before { animation: glitch-a 0.7s steps(1, end) infinite; }
+.brand:hover .glitch::after { animation: glitch-b 0.7s steps(1, end) infinite; }
+.brand:hover .brand-mark { animation: mark-flicker 0.7s steps(1, end) infinite; }
+
+@keyframes glitch-a {
+  0%, 84% { opacity: 0; transform: translate(0); clip-path: inset(0 0 100% 0); }
+  85%     { opacity: 0.95; transform: translate(-3px, -1px); clip-path: inset(8% 0 74% 0); }
+  87%     { opacity: 0.95; transform: translate(2px, 1px);   clip-path: inset(44% 0 36% 0); }
+  89%     { opacity: 0.95; transform: translate(-4px, 0);    clip-path: inset(70% 0 10% 0); }
+  91%     { opacity: 0; }
+  95%     { opacity: 0.85; transform: translate(3px, 0);     clip-path: inset(26% 0 56% 0); }
+  96.5%, 100% { opacity: 0; }
+}
+@keyframes glitch-b {
+  0%, 84% { opacity: 0; transform: translate(0); clip-path: inset(0 0 100% 0); }
+  85%     { opacity: 0.95; transform: translate(3px, 1px);   clip-path: inset(14% 0 68% 0); }
+  87%     { opacity: 0.95; transform: translate(-2px, -1px); clip-path: inset(52% 0 28% 0); }
+  89%     { opacity: 0.95; transform: translate(4px, 0);     clip-path: inset(76% 0 6% 0); }
+  91%     { opacity: 0; }
+  95%     { opacity: 0.85; transform: translate(-3px, 0);    clip-path: inset(34% 0 48% 0); }
+  96.5%, 100% { opacity: 0; }
+}
+@keyframes mark-flicker {
+  0%, 84% { opacity: 1; }
+  85%     { opacity: 0.55; }
+  86%     { opacity: 1; }
+  89%     { opacity: 0.7; }
+  90%, 100% { opacity: 1; }
+}
+@keyframes mark-scan {
+  0%, 84%   { opacity: 0; transform: translateY(-100%); }
+  85%       { opacity: 1; transform: translateY(-100%); }
+  92%       { opacity: 1; transform: translateY(100%); }
+  93%, 100% { opacity: 0; transform: translateY(100%); }
+}
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .rate-pill { font-size: 12px; color: var(--muted); }
 .icon-btn {
@@ -254,4 +312,11 @@ button { cursor: pointer; }
   .go { padding: 10px 14px; }
   .search input { font-size: 16px; }
 }
-@media (prefers-reduced-motion: reduce) { .row, .hero { transition: none; } .skeleton .sk { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .row, .hero { transition: none; }
+  .skeleton .sk { animation: none; }
+  /* No flashing for anyone who has asked the system for less motion. */
+  .glitch::before, .glitch::after, .brand-mark, .brand-mark::after,
+  .brand:hover .glitch::before, .brand:hover .glitch::after, .brand:hover .brand-mark { animation: none; opacity: 0; }
+  .brand-mark { opacity: 1; }
+}
