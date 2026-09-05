@@ -254,17 +254,20 @@ button { cursor: pointer; }
 .history {
   width: min(680px, calc(100vw - 32px)); border: 1px solid var(--border); border-radius: 16px;
   background: var(--surface); color: var(--text); padding: 20px 22px 18px; box-shadow: var(--shadow);
+  max-height: 88vh; overflow-y: auto;
 }
 .history::backdrop { background: rgba(10, 12, 24, 0.55); backdrop-filter: blur(2px); }
 .history-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .history-head h2 { font-size: 16px; margin: 0 0 2px; line-height: 1.3; }
 .history-head p { margin: 0; font-size: 13px; }
-.history-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.history-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .stat { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
 .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .stat .value { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .stat .value.small { font-size: 14px; font-weight: 600; }
-.history-chart { position: relative; height: 220px; }
+/* Let the chart keep the SVG's proportions instead of a fixed height, so narrow
+   screens don't leave a band of empty space above it. */
+.history-chart { position: relative; width: 100%; aspect-ratio: 640 / 220; }
 .history-chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .history-chart .grid { stroke: var(--border); stroke-width: 1; }
 .history-chart .axis-label { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -308,7 +311,14 @@ button { cursor: pointer; }
   .row { grid-template-columns: 56px 1fr; }
   .thumb { width: 56px; height: 56px; }
   .pricing { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-  .history { padding: 16px; }
+  .history { padding: 16px; max-height: 92vh; }
+  .history-stats { grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .history-chart { aspect-ratio: 640 / 300; }
+  .stat { padding: 8px 9px; }
+  .stat .label { font-size: 10px; }
+  .stat .value { font-size: 15px; }
+  .stat .value.small { font-size: 12px; }
+  .history-head h2 { font-size: 15px; }
   .go { padding: 10px 14px; }
   .search input { font-size: 16px; }
 }
